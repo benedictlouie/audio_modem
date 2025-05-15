@@ -20,7 +20,7 @@ def binary_to_ascii(binary_string):
     ascii_string = ''.join([chr(int(bv, 2)) for bv in binary_values])
     return ascii_string
 
-def create_wav_from_bits(bits, filename, sample_rate=44100, num_channels=1, sample_width=2):
+def create_wav_from_bits(bits, filename, sample_rate=44100, num_channels=1, sample_width=1):
     num_samples = len(bits) // 8  # each sample is 8 bits
     audio_data = []
     for i in range(num_samples):
@@ -61,5 +61,6 @@ if __name__ == "__main__":
 
     start_index_of_raw_data = (len(file_name) + len(file_size) + 2) * 8
     raw_data = combinedBits[start_index_of_raw_data:]
+    print(binary_to_ascii(raw_data)[:44])
     print(len(raw_data))
-    create_wav_from_bits(raw_data, "output.wav")
+    create_wav_from_bits(raw_data, "output.wav", 16000)

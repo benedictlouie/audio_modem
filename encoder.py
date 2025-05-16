@@ -7,7 +7,7 @@ def encode_block(symbols):
     symbolsInTime = np.fft.ifft(symbols).real
     return np.concatenate((symbolsInTime[-cyclicPrefix:], symbolsInTime))
 
-def encode(data):
+def encode(data, repeat=True):
     constellation = {
         '00': 1 + 1j,
         '01': -1 + 1j,
@@ -15,18 +15,27 @@ def encode(data):
         '11': -1 - 1j
     }
     symbols = np.array([constellation[data[i:i+2]] for i in range(0, len(data), 2)])
-    symbols = np.repeat(symbols, sampleRate // symbolRate)
-    symbols = np.concatenate((symbols, np.repeat(constellation['00'], symbolsPerBlock - len(symbols) % symbolsPerBlock)))
-    
+    if repeat:
+        symbols = np.repeat(symbols, sampleRate // symbolRate)
+    remainder = len(symbols) % symbolsPerBlock
+    if remainder:
+        symbols = np.concatenate((symbols, np.repeat(constellation['00'], symbolsPerBlock - remainder)))
+
     blockCount = len(symbols) // symbolsPerBlock
-    blockLength = 2 * (symbolsPerBlock + 1) + cyclicPrefix
     signal = np.zeros(blockCount * blockLength)
     for i in range(blockCount):
         signal[i * blockLength:(i + 1) * blockLength] = encode_block(symbols[i * symbolsPerBlock:(i + 1) * symbolsPerBlock])
     return signal
 
-if __name__ == "__main__":
-    data = prefix + text_to_binary("Hello, World!") + prefix
-    signal = encode(data)
-    write_wav(audio_path, signal)
+def start_end_blocks():
+    sequence = encode(fibonacci_binary_bits(4 * symbolsPerBlock), repeat=False)
+    start = sequence[:blockLength]
+    end = sequence[-blockLength:]
+    return start, end
 
+if __name__ == "__main__":
+    data = text_to_binary("Hello Gael")
+    signal = encode(data)
+    start, end = start_end_blocks()
+    signal = np.concatenate((np.zeros(sampleRate), start, signal, end, np.zeros(sampleRate)))
+    write_wav(audio_path, signal)

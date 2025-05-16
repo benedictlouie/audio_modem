@@ -2,9 +2,10 @@ import numpy as np
 from scipy.io.wavfile import write
 import librosa
 
-symbolsPerBlock = 1024
+symbolsPerBlock = 511
 cyclicPrefix = 32
-sampleRate = 44100
+blockLength = 2 * (symbolsPerBlock + 1) + cyclicPrefix
+sampleRate = 48000
 symbolRate = 100
 audio_path = "output.wav"
 
@@ -30,5 +31,3 @@ def text_to_binary(text):
 
 def binary_to_text(binary_str):
     return ''.join(chr(int(binary_str[i:i+8], 2)) for i in range(0, len(binary_str), 8))
-
-prefix = fibonacci_binary_bits(100)

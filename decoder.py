@@ -1,14 +1,6 @@
 import numpy as np
-import librosa
 
-audio_path = "output.wav"
-blockLength = 1024
-cyclicPrefix = 32
-frequency = 500
-
-def load_audio_file(file_path):
-    y, _ = librosa.load(file_path, sr=None)
-    return y
+from utils import *
 
 def decode_constellation(z):
     out = ''
@@ -16,15 +8,17 @@ def decode_constellation(z):
     out += '0' if z.real > 0 else '1'
     return out
 
-def decode(received):
-    truncated = received[cyclicPrefix:]
-    filtered = np.fft.fft(truncated)
-    unfiltered = filtered
-    unfiltered = unfiltered[1:blockLength//2]
-    decodedBits = [decode_constellation(z) for z in unfiltered]
-    decodedBits = ''.join(decodedBits)
-    return decodedBits
+def decode_block(data):
+    return np.fft.fft(data[cyclicPrefix:])[1:symbolsPerBlock + 1]
 
+def decode(data):
+    blockLength = 2 * (symbolsPerBlock + 1) + cyclicPrefix
+    blockCount = len(data) // blockLength
+    symbols = np.zeros(blockCount * symbolsPerBlock, dtype=complex)
+    for i in range(blockCount):
+        symbols[i * symbolsPerBlock:(i + 1) * symbolsPerBlock] = decode_block(data[i * blockLength:(i + 1) * blockLength])
+    repeatCount = sampleRate // symbolRate
+    return ''.join([decode_constellation(np.sum(symbols[i:i+repeatCount])) for i in range(0, len(symbols), repeatCount)])
 
 if __name__ == "__main__":
     y = load_audio_file(audio_path)

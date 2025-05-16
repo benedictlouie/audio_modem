@@ -43,19 +43,20 @@ def encode(bitstream, repeat=True):
 
 def insert_sync_blocks(signal):
 
-    syncBlockCount = len(signal) // blockLength // syncBlockPeriod
-    syncBlocks = synchronize_blocks(syncBlockCount + 2)
-    output = np.zeros(sampleRate)
-    for i in range(syncBlockCount):
-        output = np.concatenate((output, syncBlocks[i+1], signal[i * syncBlockPeriod * blockLength : (i+1) * syncBlockPeriod * blockLength]))
-    output = np.concatenate((output, syncBlocks[0], syncBlocks[syncBlockCount + 1], np.zeros(sampleRate)))
+    syncBlock = get_sync_block()
+    syncLength = syncBlockPeriod * blockLength
+    output = np.array([])
+    for i in range(0, len(signal), syncLength):
+        output = np.concatenate((output, signal[i: i + syncLength], syncBlock))
+    output = np.concatenate((np.zeros(sampleRate), get_start_block(), output, np.zeros(sampleRate)))
     return output
 
-# Generate blockCount synchronisation blocks
-def synchronize_blocks(blockCount):
-    # Multiply by 2 because we have 2 bits per symbol
-    sequence = encode(get_non_repeating_bits(2 * blockCount * symbolsPerBlock), repeat=False)
-    return [sequence[i * blockLength: (i+1) * blockLength] for i in range(blockCount)]
+def get_start_block():
+    return encode(get_non_repeating_bits(2 * symbolsPerBlock), repeat=False)
+
+def get_sync_block():
+    bits = get_non_repeating_bits(4 * symbolsPerBlock)
+    return encode(bits[len(bits)//2:], repeat=False)
     
 if __name__ == "__main__":
     data = text_to_binary("My name is Ben, I am a software engineer.")

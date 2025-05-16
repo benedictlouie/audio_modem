@@ -5,7 +5,7 @@ import librosa
 symbolsPerBlock = 1024
 cyclicPrefix = 32
 sampleRate = 44100
-symbolRate = 10
+symbolRate = 100
 audio_path = "output.wav"
 
 def load_audio_file(file_path):
@@ -24,3 +24,11 @@ def fibonacci_binary_bits(n):
         fib1, fib2 = fib2, fib1 + fib2
 
     return binary_string[:n]
+
+def text_to_binary(text):
+    return ''.join(format(ord(c), '08b') for c in text)
+
+def binary_to_text(binary_str):
+    return ''.join(chr(int(binary_str[i:i+8], 2)) for i in range(0, len(binary_str), 8))
+
+prefix = fibonacci_binary_bits(100)

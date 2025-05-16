@@ -26,8 +26,7 @@ def encode(data):
     return signal
 
 if __name__ == "__main__":
-    data = fibonacci_binary_bits(10)
-    print("Data:", data)
+    data = prefix + text_to_binary("Hello, World!") + prefix
     signal = encode(data)
     write_wav(audio_path, signal)
 

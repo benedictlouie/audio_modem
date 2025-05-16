@@ -18,9 +18,10 @@ def decode(data):
     for i in range(blockCount):
         symbols[i * symbolsPerBlock:(i + 1) * symbolsPerBlock] = decode_block(data[i * blockLength:(i + 1) * blockLength])
     repeatCount = sampleRate // symbolRate
-    return ''.join([decode_constellation(np.sum(symbols[i:i+repeatCount])) for i in range(0, len(symbols), repeatCount)])
+    bits = ''.join([decode_constellation(np.sum(symbols[i:i+repeatCount])) for i in range(0, len(symbols), repeatCount)])
+    return bits.split(prefix)[1]
 
 if __name__ == "__main__":
     y = load_audio_file(audio_path)
     decodedData = decode(y)
-    print(decodedData)
+    print(binary_to_text(decodedData))

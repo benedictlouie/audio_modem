@@ -3,11 +3,12 @@ import numpy as np
 from utils import *
 
 def encode_block(symbols):
-    symbols = np.concatenate((np.zeros(1), symbols, np.zeros(1), np.conjugate(symbols[::-1])))
+    zeros = np.zeros(blockLength - cyclicPrefix - 2 * symbolsPerBlock - 2)
+    symbols = np.concatenate((np.zeros(1), symbols, np.zeros(1), zeros, np.conjugate(symbols[::-1])))
     symbolsInTime = np.fft.ifft(symbols).real
     return np.concatenate((symbolsInTime[-cyclicPrefix:], symbolsInTime))
 
-def encode(data, repeat=True):
+def encode(data):
     constellation = {
         '00': 1 + 1j,
         '01': -1 + 1j,
@@ -15,11 +16,9 @@ def encode(data, repeat=True):
         '11': -1 - 1j
     }
     symbols = np.array([constellation[data[i:i+2]] for i in range(0, len(data), 2)])
-    if repeat:
-        symbols = np.repeat(symbols, sampleRate // symbolRate)
-    remainder = len(symbols) % symbolsPerBlock
+    remainder = len(symbols) % (symbolsPerBlock * syncBlockPeriod)
     if remainder:
-        symbols = np.concatenate((symbols, np.repeat(constellation['00'], symbolsPerBlock - remainder)))
+        symbols = np.concatenate((symbols, np.repeat(constellation['11'], symbolsPerBlock * syncBlockPeriod - remainder)))
 
     blockCount = len(symbols) // symbolsPerBlock
     signal = np.zeros(blockCount * blockLength)
@@ -32,17 +31,17 @@ def insert_sync_blocks(signal):
     syncBlocks = synchronize_blocks(syncBlockCount + 2)
     output = np.zeros(sampleRate)
     for i in range(syncBlockCount):
-        output = np.concatenate((output, syncBlocks[i+1], signal[i * syncBlockPeriod * blockLength : (i + 1) * syncBlockPeriod * blockLength]))
+        output = np.concatenate((output, syncBlocks[i+1], signal[i * syncBlockLength : (i + 1) * syncBlockLength]))
     output = np.concatenate((output, syncBlocks[0], syncBlocks[syncBlockCount + 1], np.zeros(sampleRate)))
     return output
 
 def synchronize_blocks(blockCount):
-    sequence = encode(get_non_repeating_bits(2 * blockCount * symbolsPerBlock), repeat=False)
+    sequence = encode(get_non_repeating_bits(2 * blockCount * symbolsPerBlock))
     return [sequence[i * blockLength:(i + 1) * blockLength] for i in range(blockCount)]
     
 
 if __name__ == "__main__":
-    data = text_to_binary("My name is Ben, I am a software engineer.")
+    data = text_to_binary("Hello World")
     signal = encode(data)
     signal = insert_sync_blocks(signal)
     write_wav(audio_path, signal)

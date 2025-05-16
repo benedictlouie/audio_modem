@@ -2,12 +2,12 @@ import numpy as np
 from scipy.io.wavfile import write
 import librosa
 
-symbolsPerBlock = 1024
-cyclicPrefix = 128
-blockLength = 2 * (symbolsPerBlock + 1) + cyclicPrefix
+symbolsPerBlock = 32
+cyclicPrefix = 400
+blockLength = 4800
 sampleRate = 48000
-symbolRate = 100
-syncBlockPeriod = 10
+syncBlockPeriod = 5
+syncBlockLength = blockLength * syncBlockPeriod
 audio_path = "output.wav"
 
 def load_audio_file(file_path):

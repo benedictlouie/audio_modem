@@ -27,15 +27,22 @@ def encode(data, repeat=True):
         signal[i * blockLength:(i + 1) * blockLength] = encode_block(symbols[i * symbolsPerBlock:(i + 1) * symbolsPerBlock])
     return signal
 
-def start_end_blocks():
-    sequence = encode(fibonacci_binary_bits(4 * symbolsPerBlock), repeat=False)
-    start = sequence[:blockLength]
-    end = sequence[-blockLength:]
-    return start, end
+def insert_sync_blocks(signal):
+    syncBlockCount = len(signal) // blockLength // syncBlockPeriod
+    syncBlocks = synchronize_blocks(syncBlockCount + 2)
+    output = np.zeros(sampleRate)
+    for i in range(syncBlockCount):
+        output = np.concatenate((output, syncBlocks[i+1], signal[i * syncBlockPeriod * blockLength : (i + 1) * syncBlockPeriod * blockLength]))
+    output = np.concatenate((output, syncBlocks[0], syncBlocks[syncBlockCount + 1], np.zeros(sampleRate)))
+    return output
+
+def synchronize_blocks(blockCount):
+    sequence = encode(get_non_repeating_bits(2 * blockCount * symbolsPerBlock), repeat=False)
+    return [sequence[i * blockLength:(i + 1) * blockLength] for i in range(blockCount)]
+    
 
 if __name__ == "__main__":
-    data = text_to_binary("Hello Gael")
+    data = text_to_binary("My name is Ben, I am a software engineer.")
     signal = encode(data)
-    start, end = start_end_blocks()
-    signal = np.concatenate((np.zeros(sampleRate), start, signal, end, np.zeros(sampleRate)))
+    signal = insert_sync_blocks(signal)
     write_wav(audio_path, signal)

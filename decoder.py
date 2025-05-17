@@ -5,7 +5,7 @@ from utils import *
 from encoder import get_start_block, get_sync_block
 
 # Decoding 4-QAM constellation with Gray Code
-def decode_constellation(z):
+def decode_constellation(z: complex) -> str:
     out = ''
     out += '0' if z.imag > 0 else '1'
     out += '0' if z.real > 0 else '1'
@@ -14,7 +14,7 @@ def decode_constellation(z):
 channel_coefficients = None
 
 # Remove cyclic prefix, do FFT, then remove zero paddings
-def decode_block(data):
+def decode_block(data: np.ndarray) -> np.ndarray:
     fourier = np.fft.fft(data[cyclicPrefix:])[1:symbolsPerBlock + 1]
 
     # Channel coefficients -- not working
@@ -23,7 +23,7 @@ def decode_block(data):
 
     return fourier
 
-def decode(data):
+def decode(data: np.ndarray) -> str:
     
     # Pad zeros if there is remainder
     remainder = len(data) % blockLength
@@ -46,23 +46,41 @@ def decode(data):
     bits = ''.join([decode_constellation(np.mean(symbols[i:i+repeatCount])) for i in range(0, len(symbols), repeatCount)])
     return bits
 
-def synchronize(signal):
+def remove_channel(signal:   np.ndarray,
+                   sent:     np.ndarray,
+                   received: np.ndarray,
+                   snr_db:   float = snr_db,
+                   eps: float = 1e-12) -> np.ndarray:
+    # FFT length — power of two ≥ longer of signal or pilot for speed/linearity
+    n_fft = 1 << (max(len(signal), len(sent)) - 1).bit_length()
+
+    # Least-squares channel estimate Ĥ(f) = R(f) / S(f)
+    S = np.fft.rfft(sent,     n=n_fft)
+    R = np.fft.rfft(received, n=n_fft)
+    H_ls = R / (S + eps)
+
+    # MMSE equaliser G(f) = H*(f) / (|H(f)|² + N₀/Pₓ)
+    snr_lin  = 10 ** (snr_db / 10)
+    n0_over_px = 1.0 / snr_lin                  # N₀ / Pₓ
+
+    G = np.conj(H_ls) / (np.abs(H_ls)**2 + n0_over_px + eps)
+
+    # Equalise the long recording
+    Sig = np.fft.rfft(signal, n=n_fft)
+    equalised = np.fft.irfft(Sig * G, n=n_fft)
+
+    return equalised[:len(signal)]
+
+def synchronize(signal: np.ndarray) -> np.ndarray:
     startBlock = get_start_block()
     syncBlock = get_sync_block()
 
     # Find where the signal starts
     startCorrelation = np.correlate(signal, startBlock)
     startIndex = np.argmax(startCorrelation)
-    # plt.plot(startCorrelation)
-    # plt.show()
 
-    # Estimate channel coefficients
-    bitstream = get_non_repeating_bits(2 * symbolsPerBlock)
-    symbols = np.array([constellation[bitstream[i:i+2]] for i in range(0, len(bitstream), 2)])
-    symbols_recieved = decode_block(signal[startIndex: startIndex + blockLength])
-    global channel_coefficients
-    channel_coefficients = symbols_recieved / symbols
-    # print(channel_coefficients[:5])
+    # Remove channel from the signal
+    signal = remove_channel(signal, startBlock, signal[startIndex : startIndex + len(startBlock)])
 
     # Find each sync block
     syncCorrelation = np.correlate(signal, syncBlock)
@@ -85,7 +103,7 @@ def synchronize(signal):
     return output
 
 if __name__ == "__main__":
-    audio_path = "x.m4a"
+    audio_path = "Downing College.m4a"
     signal = load_audio_file(audio_path)
     signal = synchronize(signal)
     decodedData = decode(signal)

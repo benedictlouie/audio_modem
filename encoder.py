@@ -3,7 +3,7 @@ import numpy as np
 from utils import *
 
 # Doing OFDM with every block
-def encode_block(symbols):
+def encode_block(symbols: np.ndarray) -> np.ndarray:
 
     # Start with one 0, add all the symbols, another 0 then conjugate the symbols
     symbols = np.concatenate((np.zeros(1), symbols, np.zeros(1), np.conjugate(symbols[::-1])))
@@ -15,7 +15,7 @@ def encode_block(symbols):
     return np.concatenate((symbolsInTime[-cyclicPrefix:], symbolsInTime))
 
 # Encode the bitstream
-def encode(bitstream, repeat=True):
+def encode(bitstream: str, repeat: bool=True) -> np.ndarray:
 
     # Get every two bits from the bitstream and turn into constellation
     symbols = np.array([constellation[bitstream[i:i+2]] for i in range(0, len(bitstream), 2)])
@@ -41,7 +41,7 @@ def encode(bitstream, repeat=True):
 
     return signal
 
-def insert_sync_blocks(signal):
+def insert_sync_blocks(signal: np.ndarray) -> np.ndarray:
 
     syncBlock = get_sync_block()
     syncLength = syncBlockPeriod * blockLength
@@ -52,19 +52,19 @@ def insert_sync_blocks(signal):
     output = np.concatenate((np.zeros(sampleRate), get_start_block(), output, np.zeros(sampleRate)))
     return output
 
-def get_start_block():
+def get_start_block() -> np.ndarray:
     return 5 * encode(get_non_repeating_bits(2 * symbolsPerBlock), repeat=False)
 
-def get_sync_block():
+def get_sync_block() -> np.ndarray:
     bits = get_non_repeating_bits(4 * symbolsPerBlock)
     return 3 * encode(bits[-len(bits)//2:], repeat=False)
 
-def get_end_block():
-    bits = get_non_repeating_bits(6 * symbolsPerBlock)
-    return encode(bits[-len(bits)//3:])
+# def get_end_block() -> np.ndarray:
+#     bits = get_non_repeating_bits(6 * symbolsPerBlock)
+#     return encode(bits[-len(bits)//3:], repeat=False)
     
 if __name__ == "__main__":
-    data = text_to_binary("Still some errors with syncronisation... I suspect")
+    data = text_to_binary("I hate ben, I only have space for Jossy in my heart.")
     signal = encode(data)
     signal = insert_sync_blocks(signal)
     write_wav(audio_path, signal)

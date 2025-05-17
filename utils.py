@@ -21,6 +21,7 @@ symbolRate = 100
 # Sync block has length blockLength
 # It happens every syncBlockPeriod blocks
 syncBlockPeriod = 10
+startBlockMultiplier = 5
 
 # Constellation
 constellation = {
@@ -30,23 +31,26 @@ constellation = {
     '11': -1 - 1j
 }
 
+# Estimated SNR
+snr_db = 0
+
 audio_path = "output.wav"
 
-def load_audio_file(file_path):
+def load_audio_file(file_path: str) -> np.ndarray:
     return librosa.load(file_path, sr=None)[0]
 
-def write_wav(filename, data, sample_rate=sampleRate):
+def write_wav(filename: str, data: np.ndarray, sample_rate: int = sampleRate) -> None:
     data = np.int16(data / np.max(np.abs(data)) * 32767)
     write(filename, sample_rate, data)
 
-def get_non_repeating_bits(n):
+def get_non_repeating_bits(n: int) -> str:
     # Generates the same binary numbers every time
     rng = np.random.default_rng(seed=42)
     bits = rng.integers(0, 2, size=n)
     return ''.join(map(str, bits))
 
-def text_to_binary(text):
+def text_to_binary(text: str) -> str:
     return ''.join(format(ord(c), '08b') for c in text)
 
-def binary_to_text(binary_str):
+def binary_to_text(binary_str: str) -> str:
     return ''.join(chr(int(binary_str[i:i+8], 2)) for i in range(0, len(binary_str), 8))

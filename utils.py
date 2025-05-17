@@ -3,8 +3,7 @@ from scipy.io.wavfile import write
 import librosa
 
 # Number of Fourier Symbols every DFT block
-symbolsPerBlock = 511
-
+symbolsPerBlock = 200
 cyclicPrefix = 32
 
 # +1 for the zeroth bit and x2 for conjugate
@@ -14,14 +13,18 @@ blockLength = 2 * (symbolsPerBlock + 1) + cyclicPrefix
 # Sample rate of audio
 sampleRate = 48000
 
-# We transmit symbolRate symbols every second
+# We transmit roughly symbolRate / 2 symbols every second
 # if sampleRate = 48000 and symbolRate = 100, we repeat each symbol 480 times
-symbolRate = 100
+# roughly equal to bitrate (ignores cyclic prefix, 0s, synchronisation, LDPC)
+symbolRate = 200
 
 # Sync block has length blockLength
 # It happens every syncBlockPeriod blocks
 syncBlockPeriod = 10
-startBlockMultiplier = 5
+startBlockMultiplier = 10
+
+# Estimated SNR
+snr_db = 10
 
 # Constellation
 constellation = {
@@ -30,9 +33,6 @@ constellation = {
     '10': 1 - 1j,
     '11': -1 - 1j
 }
-
-# Estimated SNR
-snr_db = 0
 
 audio_path = "output.wav"
 
@@ -54,3 +54,52 @@ def text_to_binary(text: str) -> str:
 
 def binary_to_text(binary_str: str) -> str:
     return ''.join(chr(int(binary_str[i:i+8], 2)) for i in range(0, len(binary_str), 8))
+
+def encode_ldpc(bits: str) -> str:
+    bits += "0" * ((-len(bits)) % 4)
+
+    data_bits = list(map(int, bits))
+    encoded = []
+
+    # positions (1-indexed): 1-p1, 2-p2, 3-d1, 4-p3, 5-d2, 6-d3, 7-d4
+    for i in range(0, len(data_bits), 4):
+        d1, d2, d3, d4 = data_bits[i : i + 4]
+
+        p1 = d1 ^ d2 ^ d4          # parity for positions 1,3,5,7
+        p2 = d1 ^ d3 ^ d4          # parity for positions 2,3,6,7
+        p3 = d2 ^ d3 ^ d4          # parity for positions 4,5,6,7
+
+        encoded.extend([p1, p2, d1, p3, d2, d3, d4])
+
+    return "".join(map(str, encoded))
+
+
+def decode_ldpc(bits: str) -> str:
+    # pad to a multiple of 7 coded bits
+    bits += "0" * ((-len(bits)) % 7)
+
+    coded_bits = list(map(int, bits))
+    decoded = []
+
+    for i in range(0, len(coded_bits), 7):
+        block = coded_bits[i : i + 7]
+        p1, p2, d1, p3, d2, d3, d4 = block
+
+        # syndrome bits (s1 = LSB, s3 = MSB)
+        s1 = p1 ^ d1 ^ d2 ^ d4
+        s2 = p2 ^ d1 ^ d3 ^ d4
+        s3 = p3 ^ d2 ^ d3 ^ d4
+        error_pos = (s3 << 2) | (s2 << 1) | s1   # 0 = no error, 1-7 = bit position to flip
+
+        if error_pos:                             # single-bit error detected
+            block[error_pos - 1] ^= 1             # correct it
+            p1, p2, d1, p3, d2, d3, d4 = block    # refresh variables after fix
+
+        decoded.extend([d1, d2, d3, d4])
+
+    return "".join(map(str, decoded))
+
+    
+
+    
+

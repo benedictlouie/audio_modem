@@ -91,9 +91,6 @@ def synchronize(signal: np.ndarray) -> np.ndarray:
     while leftBound + syncLength < len(signal):
         syncIndices = np.append(syncIndices, leftBound + np.argmax(syncCorrelation[leftBound : leftBound + syncLength]))
         leftBound = syncIndices[-1] + syncLength // 2
-    # print(len(syncIndices), syncIndices - startIndex)
-    # plt.plot(syncCorrelation)
-    # plt.show()
     
     # Remove all sync blocks
     output = np.array([])
@@ -106,5 +103,6 @@ if __name__ == "__main__":
     audio_path = "Downing College.m4a"
     signal = load_audio_file(audio_path)
     signal = synchronize(signal)
-    decodedData = decode(signal)
-    print(binary_to_text(decodedData))
+    data = decode(signal)
+    data = decode_ldpc(data)
+    print(binary_to_text(data))

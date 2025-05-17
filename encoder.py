@@ -45,6 +45,7 @@ def insert_sync_blocks(signal):
 
     syncBlock = get_sync_block()
     syncLength = syncBlockPeriod * blockLength
+
     output = np.array([])
     for i in range(0, len(signal), syncLength):
         output = np.concatenate((output, signal[i: i + syncLength], syncBlock))
@@ -56,7 +57,7 @@ def get_start_block():
 
 def get_sync_block():
     bits = get_non_repeating_bits(4 * symbolsPerBlock)
-    return encode(bits[len(bits)//2:], repeat=False)
+    return encode(bits[-len(bits)//2:], repeat=False)
     
 if __name__ == "__main__":
     data = text_to_binary("My name is Ben, I am a software engineer.")

@@ -11,13 +11,16 @@ def decode_constellation(z):
     out += '0' if z.real > 0 else '1'
     return out
 
-global channel_coefficients
+channel_coefficients = None
 
-# Remove cyclic prefix, do FFT then remove zero paddings
+# Remove cyclic prefix, do FFT, then remove zero paddings
 def decode_block(data):
     fourier = np.fft.fft(data[cyclicPrefix:])[1:symbolsPerBlock + 1]
-    if channel_coefficients != None:
-        fourier /= channel_coefficients
+
+    # Channel coefficients are not working
+    # try: fourier /= channel_coefficients
+    # except: print("Estimating channel coefficients...")
+
     return fourier
 
 def decode(data):
@@ -47,35 +50,34 @@ def synchronize(signal):
     startBlock = get_start_block()
     syncBlock = get_sync_block()
 
+    # Find where the signal starts
     startCorrelation = np.abs(np.correlate(signal, startBlock))
     startIndex = np.argmax(startCorrelation)
 
+    # Estimate channel coefficients
     bitstream = get_non_repeating_bits(2 * symbolsPerBlock)
     symbols = np.array([constellation[bitstream[i:i+2]] for i in range(0, len(bitstream), 2)])
-    print(symbols[:5])
     symbols_recieved = decode_block(signal[startIndex: startIndex + blockLength])
-    print(symbols_recieved[:5])
+    global channel_coefficients
     channel_coefficients = symbols_recieved / symbols
     print(channel_coefficients[:5])
 
+    # Find each sync block
     syncCorrelation = np.abs(np.correlate(signal, syncBlock))
     syncIndices = np.array([startIndex])
     syncLength = syncBlockPeriod * blockLength
-    print(syncLength)
     leftBound = startIndex + syncLength // 2
     while leftBound + syncLength < len(signal):
         syncIndices = np.append(syncIndices, leftBound + np.argmax(syncCorrelation[leftBound : leftBound + syncLength]))
         leftBound = syncIndices[-1] + syncLength // 2
-    print(syncIndices - startIndex)
+    print(len(syncIndices), syncIndices - startIndex)
     
+    # Remove all sync blocks
     output = np.array([])
     for i in syncIndices:
         i = int(i)
         output = np.concatenate((output, signal[i + blockLength : i + blockLength + syncLength]))
     return output
-
-
-
 
 if __name__ == "__main__":
     audio_path = "Downing College.m4a"

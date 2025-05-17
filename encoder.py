@@ -53,14 +53,18 @@ def insert_sync_blocks(signal):
     return output
 
 def get_start_block():
-    return encode(get_non_repeating_bits(2 * symbolsPerBlock), repeat=False)
+    return 5 * encode(get_non_repeating_bits(2 * symbolsPerBlock), repeat=False)
 
 def get_sync_block():
     bits = get_non_repeating_bits(4 * symbolsPerBlock)
-    return encode(bits[-len(bits)//2:], repeat=False)
+    return 3 * encode(bits[-len(bits)//2:], repeat=False)
+
+def get_end_block():
+    bits = get_non_repeating_bits(6 * symbolsPerBlock)
+    return encode(bits[-len(bits)//3:])
     
 if __name__ == "__main__":
-    data = text_to_binary("My name is Ben, I am a software engineer.")
+    data = text_to_binary("Still some errors with syncronisation... I suspect")
     signal = encode(data)
     signal = insert_sync_blocks(signal)
     write_wav(audio_path, signal)

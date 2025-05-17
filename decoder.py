@@ -17,7 +17,7 @@ channel_coefficients = None
 def decode_block(data):
     fourier = np.fft.fft(data[cyclicPrefix:])[1:symbolsPerBlock + 1]
 
-    # Channel coefficients are not working
+    # Channel coefficients -- not working
     # try: fourier /= channel_coefficients
     # except: print("Estimating channel coefficients...")
 
@@ -51,8 +51,10 @@ def synchronize(signal):
     syncBlock = get_sync_block()
 
     # Find where the signal starts
-    startCorrelation = np.abs(np.correlate(signal, startBlock))
+    startCorrelation = np.correlate(signal, startBlock)
     startIndex = np.argmax(startCorrelation)
+    # plt.plot(startCorrelation)
+    # plt.show()
 
     # Estimate channel coefficients
     bitstream = get_non_repeating_bits(2 * symbolsPerBlock)
@@ -60,17 +62,20 @@ def synchronize(signal):
     symbols_recieved = decode_block(signal[startIndex: startIndex + blockLength])
     global channel_coefficients
     channel_coefficients = symbols_recieved / symbols
-    print(channel_coefficients[:5])
+    # print(channel_coefficients[:5])
 
     # Find each sync block
-    syncCorrelation = np.abs(np.correlate(signal, syncBlock))
+    syncCorrelation = np.correlate(signal, syncBlock)
+    
     syncIndices = np.array([startIndex])
     syncLength = syncBlockPeriod * blockLength
     leftBound = startIndex + syncLength // 2
     while leftBound + syncLength < len(signal):
         syncIndices = np.append(syncIndices, leftBound + np.argmax(syncCorrelation[leftBound : leftBound + syncLength]))
         leftBound = syncIndices[-1] + syncLength // 2
-    print(len(syncIndices), syncIndices - startIndex)
+    # print(len(syncIndices), syncIndices - startIndex)
+    # plt.plot(syncCorrelation)
+    # plt.show()
     
     # Remove all sync blocks
     output = np.array([])
@@ -80,7 +85,7 @@ def synchronize(signal):
     return output
 
 if __name__ == "__main__":
-    audio_path = "Downing College.m4a"
+    audio_path = "x.m4a"
     signal = load_audio_file(audio_path)
     signal = synchronize(signal)
     decodedData = decode(signal)

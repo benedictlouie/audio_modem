@@ -5,7 +5,7 @@ from scipy.io.wavfile import write
 
 # Number of Fourier Symbols every DFT block
 symbolsPerBlock = 200
-cyclicPrefix = 32
+cyclicPrefix = symbolsPerBlock
 
 # +1 for the zeroth bit and x2 for conjugate
 # If symbolsPerBlock = 511 and cyclicPrefix = 32, blockLength = 1056
@@ -22,9 +22,6 @@ repeatCount = symbolsPerBlock
 syncBlockPeriod = 20
 startEndBlockMultiplier = 2 # TODO: this doesn't work at higher values, not sure why -G
 syncLength = syncBlockPeriod * blockLength
-
-# Estimated SNR
-snr_db = 10
 
 # Constellation
 constellation = {

@@ -81,4 +81,7 @@ His legacy shines, year after year.
     signal = encode(data)
     signal = insert_sync_blocks(signal)
     write_wav(audio_path, signal)
+
     print(f'Bitrate: {round(len(data) * sampleRate / (len(signal) - 2 * sampleRate))} bps')
+    print(f'Bitstream: {len(data)} bits')
+    print(f'Time: {(len(signal) / sampleRate - 2):.2f} seconds')

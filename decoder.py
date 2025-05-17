@@ -16,11 +16,6 @@ channel_coefficients = None
 # Remove cyclic prefix, do FFT, then remove zero paddings
 def decode_block(data: np.ndarray) -> np.ndarray:
     fourier = np.fft.fft(data[cyclicPrefix:])[1:symbolsPerBlock + 1]
-
-    # Channel coefficients -- not working
-    # try: fourier /= channel_coefficients
-    # except: print("Estimating channel coefficients...")
-
     return fourier
 
 def decode(data: np.ndarray) -> str:
@@ -48,7 +43,7 @@ def decode(data: np.ndarray) -> str:
 def remove_channel(signal:   np.ndarray,
                    sent:     np.ndarray,
                    received: np.ndarray,
-                   snr_db:   float = snr_db,
+                   snr_db:   float,
                    eps: float = 1e-12) -> np.ndarray:
     # FFT length — power of two ≥ longer of signal or pilot for speed/linearity
     n_fft = 1 << (max(len(signal), len(sent)) - 1).bit_length()
@@ -78,8 +73,23 @@ def synchronize(signal: np.ndarray) -> np.ndarray:
     startCorrelation, endCorrelation = np.correlate(signal, startBlock), np.correlate(signal, endBlock)
     startIndex, endIndex = np.argmax(startCorrelation), np.argmax(endCorrelation)
 
+    # Estimate noise power
+    noisePower = np.mean(signal[:startIndex] ** 2)
+    print(f"Noise power: {noisePower:.10f}")
+
     # Remove channel from the signal
-    signal = remove_channel(signal, startBlock, signal[startIndex : startIndex + blockLength * startEndBlockMultiplier])
+    receivedStartBlock = signal[startIndex : startIndex + blockLength * startEndBlockMultiplier]
+    signalPower = np.mean(receivedStartBlock ** 2)
+    print(f"Signal power: {signalPower:.10f}")
+    
+    if noisePower < 1e-10:
+        snr = np.inf
+    else:
+        snr = 10 * np.log10(signalPower / noisePower)
+    print(f"SNR: {snr} dB")
+    print('Bad SNR calculation, setting SNR to 0 dB')
+
+    signal = remove_channel(signal, startBlock, receivedStartBlock, 0) #snr)
 
     # Find each sync block
     syncCorrelation = np.correlate(signal, syncBlock)
@@ -102,7 +112,7 @@ def synchronize(signal: np.ndarray) -> np.ndarray:
     return output
 
 if __name__ == "__main__":
-    # audio_path = "Downing College.m4a"
+    audio_path = "Downing College.m4a"
     signal = load_audio_file(audio_path)
     signal = synchronize(signal)
     data = decode(signal)

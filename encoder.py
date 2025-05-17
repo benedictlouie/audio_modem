@@ -1,4 +1,5 @@
 import numpy as np
+from typing import Tuple
 
 from utils import *
 
@@ -15,17 +16,16 @@ def encode_block(symbols: np.ndarray) -> np.ndarray:
     return np.concatenate((symbolsInTime[-cyclicPrefix:], symbolsInTime))
 
 # Encode the bitstream
-def encode(bitstream: str, repeat: bool=True) -> np.ndarray:
+def encode(bitstream: str, syncBlock: bool=False) -> np.ndarray:
 
     # Get every two bits from the bitstream and turn into constellation
     symbols = np.array([constellation[bitstream[i:i+2]] for i in range(0, len(bitstream), 2)])
 
-    # Repetition coding
-    if repeat:
-        symbols = np.repeat(symbols, sampleRate // symbolRate)
-
-    # Pad the 00 constellation if we have remainder
-    # symbols = np.concatenate((symbols, np.repeat(constellation['00'], (-len(symbols)) % (symbolsPerBlock))))
+    if not syncBlock:
+        # Repeat symbols and make sure we have syncLength symbols
+        symbols = np.repeat(symbols, repeatCount)
+        symbols = np.concatenate((symbols, np.repeat(constellation['00'], (-len(symbols)) % syncLength)))
+        
 
     # We need this many DFT blocks
     blockCount = len(symbols) // symbolsPerBlock
@@ -41,25 +41,28 @@ def encode(bitstream: str, repeat: bool=True) -> np.ndarray:
 
 def insert_sync_blocks(signal: np.ndarray) -> np.ndarray:
 
-    syncBlock = get_sync_block()
+    startBlock, syncBlock, endBlock = get_sync_blocks()
     syncLength = syncBlockPeriod * blockLength
 
     output = np.array([])
     for i in range(0, len(signal), syncLength):
         output = np.concatenate((output, signal[i: i + syncLength], syncBlock))
-    output = np.concatenate((np.zeros(sampleRate), get_start_block(), output[:-blockLength], np.zeros(sampleRate)))
+    output = np.concatenate((np.zeros(sampleRate),
+                             startBlock,
+                             output[:-blockLength], # remove the last sync block
+                             endBlock,
+                             np.zeros(sampleRate)))
     return output
 
-def get_start_block() -> np.ndarray:
-    return encode(get_non_repeating_bits(2 * symbolsPerBlock), repeat=False)
+def get_sync_blocks() -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    bits = get_non_repeating_bits(2 * symbolsPerBlock * (2 * startEndBlockMultiplier + 1))
+    blocks = encode(bits, syncBlock=True)
 
-def get_sync_block() -> np.ndarray:
-    bits = get_non_repeating_bits(4 * symbolsPerBlock)
-    return encode(bits[-len(bits)//2:], repeat=False)
+    startBlock = blocks[:blockLength * startEndBlockMultiplier]
+    syncBlock = blocks[blockLength * startEndBlockMultiplier: blockLength * (startEndBlockMultiplier + 1)]
+    endBlock = blocks[blockLength * (startEndBlockMultiplier + 1):]
 
-# def get_end_block() -> np.ndarray:
-#     bits = get_non_repeating_bits(6 * symbolsPerBlock)
-#     return encode(bits[-len(bits)//3:], repeat=False)
+    return startBlock, syncBlock, endBlock
     
 if __name__ == "__main__":
     text = """
@@ -74,7 +77,7 @@ A luminary in academia's sphere,
 His legacy shines, year after year.
 """
     data = text_to_binary(text)
-    data = encode_ldpc(data)
+    # data = encode_ldpc(data)
     signal = encode(data)
     signal = insert_sync_blocks(signal)
     write_wav(audio_path, signal)

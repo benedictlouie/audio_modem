@@ -1,6 +1,7 @@
+import contextlib
+import librosa
 import numpy as np
 from scipy.io.wavfile import write
-import librosa
 
 # Number of Fourier Symbols every DFT block
 symbolsPerBlock = 200
@@ -13,15 +14,14 @@ blockLength = 2 * (symbolsPerBlock + 1) + cyclicPrefix
 # Sample rate of audio
 sampleRate = 48000
 
-# We transmit roughly symbolRate / 2 symbols every second
-# if sampleRate = 48000 and symbolRate = 100, we repeat each symbol 480 times
-# roughly equal to bitrate (ignores cyclic prefix, 0s, synchronisation, LDPC)
-symbolRate = 200
+# How many times we repeat the symbols
+repeatCount = symbolsPerBlock
 
 # Sync block has length blockLength
 # It happens every syncBlockPeriod blocks
-syncBlockPeriod = 10
-startBlockMultiplier = 10
+syncBlockPeriod = 20
+startEndBlockMultiplier = 2 # TODO: this doesn't work at higher values, not sure why -G
+syncLength = syncBlockPeriod * blockLength
 
 # Estimated SNR
 snr_db = 10
@@ -37,7 +37,8 @@ constellation = {
 audio_path = "output.wav"
 
 def load_audio_file(file_path: str) -> np.ndarray:
-    return librosa.load(file_path, sr=None)[0]
+    with contextlib.redirect_stderr(None):
+        return librosa.load(file_path, sr=None)[0]
 
 def write_wav(filename: str, data: np.ndarray, sample_rate: int = sampleRate) -> None:
     data = np.int16(data / np.max(np.abs(data)) * 32767)

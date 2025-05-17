@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from utils import *
-from encoder import get_start_block, get_sync_block
+from encoder import get_sync_blocks
 
 # Decoding 4-QAM constellation with Gray Code
 def decode_constellation(z: complex) -> str:
@@ -42,7 +42,6 @@ def decode(data: np.ndarray) -> str:
         symbols[i * symbolsPerBlock: (i+1) * symbolsPerBlock] = decode_block(data[i * blockLength: (i+1) * blockLength])
 
     # Repetition decoding, take the mean
-    repeatCount = sampleRate // symbolRate
     bits = ''.join([decode_constellation(np.mean(symbols[i:i+repeatCount])) for i in range(0, len(symbols), repeatCount)])
     return bits
 
@@ -72,37 +71,40 @@ def remove_channel(signal:   np.ndarray,
     return equalised[:len(signal)]
 
 def synchronize(signal: np.ndarray) -> np.ndarray:
-    startBlock = get_start_block()
-    syncBlock = get_sync_block()
 
-    # Find where the signal starts
-    startCorrelation = np.correlate(signal, startBlock)
-    startIndex = np.argmax(startCorrelation)
+    startBlock, syncBlock, endBlock = get_sync_blocks()
+
+    # Find where the signal starts and ends
+    startCorrelation, endCorrelation = np.correlate(signal, startBlock), np.correlate(signal, endBlock)
+    startIndex, endIndex = np.argmax(startCorrelation), np.argmax(endCorrelation)
 
     # Remove channel from the signal
-    signal = remove_channel(signal, startBlock, signal[startIndex : startIndex + len(startBlock)])
+    signal = remove_channel(signal, startBlock, signal[startIndex : startIndex + blockLength * startEndBlockMultiplier])
 
     # Find each sync block
     syncCorrelation = np.correlate(signal, syncBlock)
     
-    syncIndices = np.array([startIndex])
-    syncLength = syncBlockPeriod * blockLength
+    syncIndices = np.array([startIndex + (startEndBlockMultiplier - 1) * blockLength])
     leftBound = startIndex + syncLength // 2
     while leftBound + syncLength < len(signal):
-        syncIndices = np.append(syncIndices, leftBound + np.argmax(syncCorrelation[leftBound : leftBound + syncLength]))
+        found_index = leftBound + np.argmax(syncCorrelation[leftBound : leftBound + syncLength])
+        if found_index > endIndex:
+            break
+        syncIndices = np.append(syncIndices, found_index)
         leftBound = syncIndices[-1] + syncLength // 2
-    
+    syncIndices = syncIndices[:-1]  # Remove the last one, which is out of bounds
     # Remove all sync blocks
     output = np.array([])
     for i in syncIndices:
         i = int(i)
         output = np.concatenate((output, signal[i + blockLength : i + blockLength + syncLength]))
+
     return output
 
 if __name__ == "__main__":
-    audio_path = "Downing College.m4a"
+    # audio_path = "Downing College.m4a"
     signal = load_audio_file(audio_path)
     signal = synchronize(signal)
     data = decode(signal)
-    data = decode_ldpc(data)
+    # data = decode_ldpc(data)
     print(binary_to_text(data))

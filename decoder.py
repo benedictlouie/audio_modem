@@ -67,52 +67,29 @@ def remove_channel(signal:   np.ndarray,
 
 def synchronize(signal: np.ndarray) -> np.ndarray:
 
-    startBlock, syncBlock, endBlock = get_sync_blocks()
+    startBlock, endBlock = get_sync_blocks()
 
-    # Find where the signal starts and ends
     startCorrelation, endCorrelation = np.correlate(signal, startBlock), np.correlate(signal, endBlock)
     startIndex, endIndex = np.argmax(startCorrelation), np.argmax(endCorrelation)
 
-    # Estimate noise power
-    noisePower = np.mean(signal[:startIndex] ** 2)
-    print(f"Noise power: {noisePower:.10f}")
-
-    # Remove channel from the signal
     receivedStartBlock = signal[startIndex : startIndex + blockLength * startEndBlockMultiplier]
-    signalPower = np.mean(receivedStartBlock ** 2)
-    print(f"Signal power: {signalPower:.10f}")
+
+    signal = remove_channel(signal, startBlock, receivedStartBlock, 0)
     
-    if noisePower < 1e-10:
-        snr = np.inf
-    else:
-        snr = 10 * np.log10(signalPower / noisePower)
-    print(f"SNR: {snr} dB")
-    print('Bad SNR calculation, setting SNR to 0 dB')
-
-    signal = remove_channel(signal, startBlock, receivedStartBlock, 0) #snr)
-
-    # Find each sync block
-    syncCorrelation = np.correlate(signal, syncBlock)
+    signal = signal[startIndex + blockLength * startEndBlockMultiplier - blockLength//4: endIndex + blockLength //4]
+    correlate = np.zeros(len(signal) - blockLength)
+    for i in range(len(correlate)):
+        correlate[i] = np.dot(signal[i : i + blockLength//2], signal[i + blockLength//2: i + blockLength])
     
-    syncIndices = np.array([startIndex + (startEndBlockMultiplier - 1) * blockLength])
-    leftBound = startIndex + syncLength // 2
-    while leftBound + syncLength < len(signal):
-        found_index = leftBound + np.argmax(syncCorrelation[leftBound : leftBound + syncLength])
-        if found_index > endIndex:
-            break
-        syncIndices = np.append(syncIndices, found_index)
-        leftBound = syncIndices[-1] + syncLength // 2
-    syncIndices = syncIndices[:-1]  # Remove the last one, which is out of bounds
-    # Remove all sync blocks
-    output = np.array([])
-    for i in syncIndices:
-        i = int(i)
-        output = np.concatenate((output, signal[i + blockLength : i + blockLength + syncLength]))
-
+    blockCount = len(signal) // blockLength
+    output = np.zeros(blockLength * blockCount)
+    for i in range(blockCount):
+        syncIndex = i*blockLength + int(np.argmax(correlate[i * blockLength : (i + 1) * blockLength]))
+        output[i * blockLength : (i + 1) * blockLength] = signal[syncIndex : syncIndex + blockLength]
     return output
 
 if __name__ == "__main__":
-    audio_path = "Downing College.m4a"
+    # audio_path = "Downing College.m4a"
     signal = load_audio_file(audio_path)
     signal = synchronize(signal)
     data = decode(signal)

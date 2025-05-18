@@ -4,8 +4,8 @@ import numpy as np
 from scipy.io.wavfile import write
 
 # Number of Fourier Symbols every DFT block
-symbolsPerBlock = 200
-cyclicPrefix = symbolsPerBlock
+symbolsPerBlock = 500
+cyclicPrefix = 2 * (symbolsPerBlock + 1)
 
 # +1 for the zeroth bit and x2 for conjugate
 # If symbolsPerBlock = 511 and cyclicPrefix = 32, blockLength = 1056
@@ -15,13 +15,10 @@ blockLength = 2 * (symbolsPerBlock + 1) + cyclicPrefix
 sampleRate = 48000
 
 # How many times we repeat the symbols
-repeatCount = symbolsPerBlock
+repeatCount = 100#symbolsPerBlock
 
 # Sync block has length blockLength
-# It happens every syncBlockPeriod blocks
-syncBlockPeriod = 20
 startEndBlockMultiplier = 2 # TODO: this doesn't work at higher values, not sure why -G
-syncLength = syncBlockPeriod * blockLength
 
 # Constellation
 constellation = {
@@ -41,9 +38,9 @@ def write_wav(filename: str, data: np.ndarray, sample_rate: int = sampleRate) ->
     data = np.int16(data / np.max(np.abs(data)) * 32767)
     write(filename, sample_rate, data)
 
-def get_non_repeating_bits(n: int) -> str:
+def get_non_repeating_bits(n: int, seed:int = 42) -> str:
     # Generates the same binary numbers every time
-    rng = np.random.default_rng(seed=42)
+    rng = np.random.default_rng(seed=seed)
     bits = rng.integers(0, 2, size=n)
     return ''.join(map(str, bits))
 

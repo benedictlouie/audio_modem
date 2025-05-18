@@ -24,7 +24,7 @@ def encode(bitstream: str, syncBlock: bool=False) -> np.ndarray:
     if not syncBlock:
         # Repeat symbols and make sure we have syncLength symbols
         symbols = np.repeat(symbols, repeatCount)
-        symbols = np.concatenate((symbols, np.repeat(constellation['00'], (-len(symbols)) % syncLength)))
+        symbols = np.concatenate((symbols, np.repeat(constellation['00'], (-len(symbols)) % symbolsPerBlock)))
         
 
     # We need this many DFT blocks
@@ -41,28 +41,22 @@ def encode(bitstream: str, syncBlock: bool=False) -> np.ndarray:
 
 def insert_sync_blocks(signal: np.ndarray) -> np.ndarray:
 
-    startBlock, syncBlock, endBlock = get_sync_blocks()
-    syncLength = syncBlockPeriod * blockLength
-
-    output = np.array([])
-    for i in range(0, len(signal), syncLength):
-        output = np.concatenate((output, signal[i: i + syncLength], syncBlock))
+    startBlock, endBlock = get_sync_blocks()
     output = np.concatenate((np.zeros(sampleRate),
                              startBlock,
-                             output[:-blockLength], # remove the last sync block
+                             signal,
                              endBlock,
                              np.zeros(sampleRate)))
     return output
 
 def get_sync_blocks() -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    bits = get_non_repeating_bits(2 * symbolsPerBlock * (2 * startEndBlockMultiplier + 1))
+    bits = get_non_repeating_bits(4 * symbolsPerBlock * startEndBlockMultiplier)
     blocks = encode(bits, syncBlock=True)
 
     startBlock = blocks[:blockLength * startEndBlockMultiplier]
-    syncBlock = blocks[blockLength * startEndBlockMultiplier: blockLength * (startEndBlockMultiplier + 1)]
-    endBlock = blocks[blockLength * (startEndBlockMultiplier + 1):]
+    endBlock = blocks[blockLength * startEndBlockMultiplier:]
 
-    return startBlock, syncBlock, endBlock
+    return startBlock, endBlock
     
 if __name__ == "__main__":
     text = """

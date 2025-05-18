@@ -4,8 +4,19 @@ import matplotlib.pyplot as plt
 from utils import *
 from encoder import get_sync_blocks
 
-# Decoding 4-QAM constellation with Gray Code
+# Decoding constellation
+# Can use KD tree in the future
 def decode_constellation(z: complex) -> str:
+
+    closestConstellation = None
+    minDist = float('inf')
+    for constellation in revConstellation:
+        dist = np.abs(z - constellation)
+        if dist < minDist:
+            minDist = dist
+            closestConstellation = constellation
+    return revConstellation[closestConstellation]
+
     out = ''
     out += '0' if z.imag > 0 else '1'
     out += '0' if z.real > 0 else '1'
@@ -36,8 +47,14 @@ def decode(data: np.ndarray) -> str:
     for i in range(blockCount):
         symbols[i * symbolsPerBlock: (i+1) * symbolsPerBlock] = decode_block(data[i * blockLength: (i+1) * blockLength])
 
+    # Normalise the symbol to have power 1
+    symbols /= np.sqrt(np.mean(np.abs(symbols) ** 2))
+
     # Repetition decoding, take the mean
-    bits = ''.join([decode_constellation(np.mean(symbols[i:i+repeatCount])) for i in range(0, len(symbols), repeatCount)])
+    bits = ""
+    for i in range(0, len(symbols), repeatCount):
+        symbol = np.mean(symbols[i:i+repeatCount])
+        bits += decode_constellation(symbol)
     return bits
 
 def remove_channel(signal:   np.ndarray,
@@ -75,19 +92,19 @@ def synchronize(signal: np.ndarray) -> np.ndarray:
 
     # Estimate noise power
     noisePower = np.mean(signal[:startIndex] ** 2)
-    print(f"Noise power: {noisePower:.10f}")
+    # print(f"Noise power: {noisePower:.10f}")
 
     # Remove channel from the signal
     receivedStartBlock = signal[startIndex : startIndex + blockLength * startEndBlockMultiplier]
     signalPower = np.mean(receivedStartBlock ** 2)
-    print(f"Signal power: {signalPower:.10f}")
+    # print(f"Signal power: {signalPower:.10f}")
     
     if noisePower < 1e-10:
         snr = np.inf
     else:
         snr = 10 * np.log10(signalPower / noisePower)
-    print(f"SNR: {snr} dB")
-    print('Bad SNR calculation, setting SNR to 0 dB')
+    # print(f"SNR: {snr} dB")
+    # print('Bad SNR calculation, setting SNR to 0 dB')
 
     signal = remove_channel(signal, startBlock, receivedStartBlock, 0) #snr)
 
@@ -103,12 +120,13 @@ def synchronize(signal: np.ndarray) -> np.ndarray:
         syncIndices = np.append(syncIndices, found_index)
         leftBound = syncIndices[-1] + syncLength // 2
     syncIndices = syncIndices[:-1]  # Remove the last one, which is out of bounds
+
     # Remove all sync blocks
     output = np.array([])
     for i in syncIndices:
         i = int(i)
         output = np.concatenate((output, signal[i + blockLength : i + blockLength + syncLength]))
-
+        
     return output
 
 if __name__ == "__main__":

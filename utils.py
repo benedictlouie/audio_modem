@@ -4,8 +4,8 @@ import numpy as np
 from scipy.io.wavfile import write
 
 # Number of Fourier Symbols every DFT block
-symbolsPerBlock = 200
-cyclicPrefix = symbolsPerBlock
+symbolsPerBlock = 511
+cyclicPrefix = 32
 
 # +1 for the zeroth bit and x2 for conjugate
 # If symbolsPerBlock = 511 and cyclicPrefix = 32, blockLength = 1056
@@ -15,21 +15,28 @@ blockLength = 2 * (symbolsPerBlock + 1) + cyclicPrefix
 sampleRate = 48000
 
 # How many times we repeat the symbols
-repeatCount = symbolsPerBlock
+repeatCount = 500
 
 # Sync block has length blockLength
 # It happens every syncBlockPeriod blocks
-syncBlockPeriod = 20
-startEndBlockMultiplier = 2 # TODO: this doesn't work at higher values, not sure why -G
+syncBlockPeriod = 10
+startEndBlockMultiplier = 1 # 2 is optimal
 syncLength = syncBlockPeriod * blockLength
 
 # Constellation
 constellation = {
-    '00': 1 + 1j,
-    '01': -1 + 1j,
-    '10': 1 - 1j,
-    '11': -1 - 1j
+    '00': 0.707 + 0.707j,
+    '01': -0.707 + 0.707j,
+    '10': 0.707 - 0.707j,
+    '11': -0.707 - 0.707j
 }
+
+bitsPerConstellation = int(np.log2(len(constellation)))
+
+# Reverse constellation
+revConstellation = {}
+for bits, coord in constellation.items():
+    revConstellation[coord] = bits
 
 audio_path = "output.wav"
 

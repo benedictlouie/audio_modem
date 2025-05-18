@@ -18,14 +18,15 @@ def encode_block(symbols: np.ndarray) -> np.ndarray:
 # Encode the bitstream
 def encode(bitstream: str, syncBlock: bool=False) -> np.ndarray:
 
-    # Get every two bits from the bitstream and turn into constellation
-    symbols = np.array([constellation[bitstream[i:i+2]] for i in range(0, len(bitstream), 2)])
+    # Get every bitsPerConstellation bits from the bitstream and turn into constellation
+    symbols = np.array([])
+    for i in range(0, len(bitstream), bitsPerConstellation):
+        symbols = np.append(symbols, constellation[bitstream[i:i+bitsPerConstellation]])
 
     if not syncBlock:
         # Repeat symbols and make sure we have syncLength symbols
         symbols = np.repeat(symbols, repeatCount)
-        symbols = np.concatenate((symbols, np.repeat(constellation['00'], (-len(symbols)) % syncLength)))
-        
+        symbols = np.concatenate((symbols, np.repeat(constellation['0' * bitsPerConstellation], (-len(symbols)) % syncLength)))       
 
     # We need this many DFT blocks
     blockCount = len(symbols) // symbolsPerBlock
@@ -55,27 +56,18 @@ def insert_sync_blocks(signal: np.ndarray) -> np.ndarray:
     return output
 
 def get_sync_blocks() -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    bits = get_non_repeating_bits(2 * symbolsPerBlock * (2 * startEndBlockMultiplier + 1))
+
+    bits = get_non_repeating_bits(bitsPerConstellation * symbolsPerBlock * (2 * startEndBlockMultiplier + 1))
     blocks = encode(bits, syncBlock=True)
 
-    startBlock = blocks[:blockLength * startEndBlockMultiplier]
-    syncBlock = blocks[blockLength * startEndBlockMultiplier: blockLength * (startEndBlockMultiplier + 1)]
-    endBlock = blocks[blockLength * (startEndBlockMultiplier + 1):]
+    startBlock = 5 * blocks[:blockLength * startEndBlockMultiplier]
+    syncBlock = 3 * blocks[blockLength * startEndBlockMultiplier: blockLength * (startEndBlockMultiplier + 1)]
+    endBlock = 4 * blocks[blockLength * (startEndBlockMultiplier + 1):]
 
     return startBlock, syncBlock, endBlock
     
 if __name__ == "__main__":
-    text = """
-In Cambridge's halls where knowledge flows,
-A beacon of wisdom, his presence shows.
-From Zürich's peaks to England's plains,
-He charts the course where learning reigns.
-
-So here's to Sayir, whose endless quest,
-Ignites the minds, inspires the best.
-A luminary in academia's sphere,
-His legacy shines, year after year.
-"""
+    text = "In Cambridge's halls where knowledge flows"
     data = text_to_binary(text)
     # data = encode_ldpc(data)
     signal = encode(data)

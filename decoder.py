@@ -2,137 +2,87 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from utils import *
-from encoder import get_sync_blocks
+from encoder import get_pilot_signal, get_filter_blocks
 
-# Decoding constellation
-# Can use KD tree in the future
-def decode_constellation(z: complex) -> str:
-
-    closestConstellation = None
-    minDist = float('inf')
-    for constellation in revConstellation:
-        dist = np.abs(z - constellation)
-        if dist < minDist:
-            minDist = dist
-            closestConstellation = constellation
-    return revConstellation[closestConstellation]
-
-    out = ''
-    out += '0' if z.imag > 0 else '1'
-    out += '0' if z.real > 0 else '1'
-    return out
-
-channel_coefficients = None
-
-# Remove cyclic prefix, do FFT, then remove zero paddings
 def decode_block(data: np.ndarray) -> np.ndarray:
-    fourier = np.fft.fft(data[cyclicPrefix:])[1:symbolsPerBlock + 1]
+    """
+    Decode a block of data using FFT and extract the symbols.
+    """
+    fourier = np.fft.fft(data[CYCLIC_PREFIX:])[1:SYMBOLS_PER_BLOCK + 1]
     return fourier
 
-def decode(data: np.ndarray) -> str:
-    
-    # Pad zeros if there is remainder
-    remainder = len(data) % blockLength
-    if remainder:
-        print(f'Warning: remainder = {remainder}')
-        data = np.concatenate((data, np.zeros(blockLength - remainder)))
-    
-    # We have this many DFT blocks
-    blockCount = len(data) // blockLength
+def decode(signal: np.ndarray) -> np.ndarray:
+    """
+    Decode the received signal into a bitstream.
+    """
 
-    # Initialise symbols array
-    symbols = np.zeros(blockCount * symbolsPerBlock, dtype=complex)
-
-    # For every block, we decode the signal
+    blockCount = len(signal) // BLOCK_LENGTH
+    symbols = np.zeros(blockCount * SYMBOLS_PER_BLOCK, dtype=complex)
     for i in range(blockCount):
-        symbols[i * symbolsPerBlock: (i+1) * symbolsPerBlock] = decode_block(data[i * blockLength: (i+1) * blockLength])
+        symbols[i * SYMBOLS_PER_BLOCK: (i+1) * SYMBOLS_PER_BLOCK] = decode_block(signal[i * BLOCK_LENGTH: (i+1) * BLOCK_LENGTH])
+    return symbols
 
-    # Normalise the symbol to have power 1
-    symbols /= np.sqrt(np.mean(np.abs(symbols) ** 2))
-
-    # Repetition decoding, take the mean
-    bits = ""
-    for i in range(0, len(symbols), repeatCount):
-        symbol = np.mean(symbols[i:i+repeatCount])
-        bits += decode_constellation(symbol)
-    return bits
-
-def remove_channel(signal:   np.ndarray,
-                   sent:     np.ndarray,
-                   received: np.ndarray,
-                   snr_db:   float,
-                   eps: float = 1e-12) -> np.ndarray:
-    # FFT length — power of two ≥ longer of signal or pilot for speed/linearity
-    n_fft = 1 << (max(len(signal), len(sent)) - 1).bit_length()
-
-    # Least-squares channel estimate Ĥ(f) = R(f) / S(f)
-    S = np.fft.rfft(sent,     n=n_fft)
-    R = np.fft.rfft(received, n=n_fft)
-    H_ls = R / (S + eps)
-
-    # MMSE equaliser G(f) = H*(f) / (|H(f)|² + N₀/Pₓ)
-    snr_lin  = 10 ** (snr_db / 10)
-    n0_over_px = 1.0 / snr_lin                  # N₀ / Pₓ
-
-    G = np.conj(H_ls) / (np.abs(H_ls)**2 + n0_over_px + eps)
-
-    # Equalise the long recording
-    Sig = np.fft.rfft(signal, n=n_fft)
-    equalised = np.fft.irfft(Sig * G, n=n_fft)
-
-    return equalised[:len(signal)]
+def get_filter(sent: np.ndarray, received: np.ndarray, snr: float) -> np.ndarray:
+    """
+    Calculate the filter for the channel using the sent and received signals.
+    """
+    S = np.fft.fft(sent)
+    R = np.fft.fft(received)
+    H = R / (S + 1e-10)
+    return np.conjugate(H) / (np.abs(H) ** 2 + 1 / snr)
 
 def synchronize(signal: np.ndarray) -> np.ndarray:
+    """
+    Synchronize the received signal.
+    """
+    pilot = get_pilot_signal()
+    startIndex = np.argmax(np.correlate(signal, pilot))
+    endIndex = np.argmax(np.correlate(signal, pilot[::-1]))
 
-    startBlock, syncBlock, endBlock = get_sync_blocks()
+    noise_power = np.mean(np.concatenate((signal[:startIndex], signal[endIndex + CHIRP_LENGTH:])) ** 2)
+    signal = signal[startIndex + CHIRP_LENGTH:endIndex]
 
-    # Find where the signal starts and ends
-    startCorrelation, endCorrelation = np.correlate(signal, startBlock), np.correlate(signal, endBlock)
-    startIndex, endIndex = np.argmax(startCorrelation), np.argmax(endCorrelation)
-
-    # Estimate noise power
-    noisePower = np.mean(signal[:startIndex] ** 2)
-    # print(f"Noise power: {noisePower:.10f}")
-
-    # Remove channel from the signal
-    receivedStartBlock = signal[startIndex : startIndex + blockLength * startEndBlockMultiplier]
-    signalPower = np.mean(receivedStartBlock ** 2)
-    # print(f"Signal power: {signalPower:.10f}")
+    targetLength = round(len(signal) / BLOCK_LENGTH) * BLOCK_LENGTH
+    # linear interpolations
+    # signal = np.interp(np.linspace(0, len(signal) - 1, targetLength), np.arange(len(signal)), signal)
+    # nearest neighbor interpolation
+    signal = signal[(np.linspace(0, len(signal) - 1, targetLength)).astype(int)]
     
-    if noisePower < 1e-10:
-        snr = np.inf
-    else:
-        snr = 10 * np.log10(signalPower / noisePower)
-    # print(f"SNR: {snr} dB")
-    # print('Bad SNR calculation, setting SNR to 0 dB')
-
-    signal = remove_channel(signal, startBlock, receivedStartBlock, 0) #snr)
-
-    # Find each sync block
-    syncCorrelation = np.correlate(signal, syncBlock)
+    received = signal[:FILTER_BLOCKS * BLOCK_LENGTH]
+    signal = signal[FILTER_BLOCKS * BLOCK_LENGTH:]
     
-    syncIndices = np.array([startIndex + (startEndBlockMultiplier - 1) * blockLength])
-    leftBound = startIndex + syncLength // 2
-    while leftBound + syncLength < len(signal):
-        found_index = leftBound + np.argmax(syncCorrelation[leftBound : leftBound + syncLength])
-        if found_index > endIndex:
-            break
-        syncIndices = np.append(syncIndices, found_index)
-        leftBound = syncIndices[-1] + syncLength // 2
-    syncIndices = syncIndices[:-1]  # Remove the last one, which is out of bounds
+    signal_power = np.mean(signal ** 2)
+    snr = signal_power / noise_power
+    print(f"Signal Power: {signal_power}, Noise Power: {noise_power}, SNR: {snr}")
 
-    # Remove all sync blocks
-    output = np.array([])
-    for i in syncIndices:
-        i = int(i)
-        output = np.concatenate((output, signal[i + blockLength : i + blockLength + syncLength]))
-        
-    return output
+    sent = get_filter_blocks()
+
+    if noise_power == 0: return signal
+    return remove_channel(signal, sent, received, snr)
+
+def remove_channel(signal: np.ndarray, sent: np.ndarray, received: np.ndarray, snr: float) -> np.ndarray:
+    """
+    Remove the channel effect from the received signal using the sent signal.
+    """
+    filterLength = BLOCK_LENGTH * FILTER_BLOCKS // FILTER_DIVISOR
+    filter = np.zeros(filterLength, dtype=complex)
+    for i in range(0, BLOCK_LENGTH * FILTER_BLOCKS, filterLength):
+        filter += get_filter(sent[i:i + filterLength], received[i:i + filterLength], 1) / FILTER_DIVISOR
+    h = np.fft.ifft(filter).real
+    h = h[:filterLength // 2]
+    plt.plot(h)
+    plt.show()
+    return np.convolve(signal, h, mode='same')
 
 if __name__ == "__main__":
-    audio_path = "Downing College.m4a"
-    signal = load_audio_file(audio_path)
+    AUDIO_PATH = "Downing College.m4a"
+    signal = load_audio_file(AUDIO_PATH)
     signal = synchronize(signal)
-    data = decode(signal)
-    # data = decode_ldpc(data)
-    print(binary_to_text(data))
+
+    sent = get_symbols_from_bitstream(DATA)
+    received = decode(signal)
+
+    plot_sent_received_constellation(sent, received)
+
+    # received_data = get_bitstream_from_symbols(received_symbols)[:len(DATA)]
+    # print(f'Error Rate: {np.sum(np.array(list(received_data)) != np.array(list(DATA))) / len(DATA) * 100:.2f}%')

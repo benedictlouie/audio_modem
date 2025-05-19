@@ -1,79 +1,57 @@
 import numpy as np
 from typing import Tuple
 
+import matplotlib.pyplot as plt
+
 from utils import *
 
-# Doing OFDM with every block
 def encode_block(symbols: np.ndarray) -> np.ndarray:
-
-    # Start with one 0, add all the symbols, another 0 then conjugate the symbols
+    """
+    Encode a block of symbols into a time-domain signal using IFFT and add a cyclic prefix.
+    """
     symbols = np.concatenate((np.zeros(1), symbols, np.zeros(1), np.conjugate(symbols[::-1])))
-
-    # IFFT
     symbolsInTime = np.fft.ifft(symbols).real
+    return np.concatenate((symbolsInTime[-CYCLIC_PREFIX:], symbolsInTime))
 
-    # Add the cyclic prefix in front
-    return np.concatenate((symbolsInTime[-cyclicPrefix:], symbolsInTime))
-
-# Encode the bitstream
-def encode(bitstream: str, syncBlock: bool=False) -> np.ndarray:
-
-    # Get every bitsPerConstellation bits from the bitstream and turn into constellation
-    symbols = np.array([])
-    for i in range(0, len(bitstream), bitsPerConstellation):
-        symbols = np.append(symbols, constellation[bitstream[i:i+bitsPerConstellation]])
-
-    if not syncBlock:
-        # Repeat symbols and make sure we have syncLength symbols
-        symbols = np.repeat(symbols, repeatCount)
-        symbols = np.concatenate((symbols, np.repeat(constellation['0' * bitsPerConstellation], (-len(symbols)) % syncLength)))       
-
-    # We need this many DFT blocks
-    blockCount = len(symbols) // symbolsPerBlock
-
-    # Initialise an all-zero signal array
-    signal = np.zeros(blockCount * blockLength)
-
-    # For every block, we encode the signal
+def encode(symbols: np.ndarray) -> np.ndarray:
+    """
+    Encode a bitstream into a time-domain signal using IFFT and add a cyclic prefix.
+    """
+    blockCount = len(symbols) // SYMBOLS_PER_BLOCK
+    signal = np.zeros(blockCount * BLOCK_LENGTH)
     for i in range(blockCount):
-        signal[i * blockLength : (i+1) * blockLength] = encode_block(symbols[i * symbolsPerBlock : (i+1) * symbolsPerBlock])
-
+        signal[i * BLOCK_LENGTH : (i+1) * BLOCK_LENGTH] = encode_block(symbols[i * SYMBOLS_PER_BLOCK : (i+1) * SYMBOLS_PER_BLOCK])
     return signal
 
-def insert_sync_blocks(signal: np.ndarray) -> np.ndarray:
+def insert_pilot_signals(signal: np.ndarray) -> np.ndarray:
+    """
+    Insert pilot signals at the beginning and end of the signal.
+    """
+    pilot = get_pilot_signal()
+    return np.concatenate((pilot, signal, pilot[::-1]))
 
-    startBlock, syncBlock, endBlock = get_sync_blocks()
-    syncLength = syncBlockPeriod * blockLength
+def get_pilot_signal() -> np.ndarray:
+    """
+    Generate a pilot signal using a chirp signal.
+    """
+    t = np.linspace(0, CHIRP_TIME, CHIRP_LENGTH)
+    chirp = CHIRP_FACTOR * np.sin(2 * np.pi * (CHIRP_LOW + (CHIRP_HIGH - CHIRP_LOW) * t / CHIRP_TIME) * t)
+    return chirp
 
-    output = np.array([])
-    for i in range(0, len(signal), syncLength):
-        output = np.concatenate((output, signal[i: i + syncLength], syncBlock))
-    output = np.concatenate((np.zeros(sampleRate),
-                             startBlock,
-                             output[:-blockLength], # remove the last sync block
-                             endBlock,
-                             np.zeros(sampleRate)))
-    return output
-
-def get_sync_blocks() -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-
-    bits = get_non_repeating_bits(bitsPerConstellation * symbolsPerBlock * (2 * startEndBlockMultiplier + 1))
-    blocks = encode(bits, syncBlock=True)
-
-    startBlock = 5 * blocks[:blockLength * startEndBlockMultiplier]
-    syncBlock = 3 * blocks[blockLength * startEndBlockMultiplier: blockLength * (startEndBlockMultiplier + 1)]
-    endBlock = 4 * blocks[blockLength * (startEndBlockMultiplier + 1):]
-
-    return startBlock, syncBlock, endBlock
+def get_filter_blocks() -> np.ndarray:
+    """
+    Generate filter blocks for the signal.
+    """
+    return FILTER_MULTIPLIER * get_white_noise(FILTER_BLOCKS * BLOCK_LENGTH, seed=0)
     
 if __name__ == "__main__":
-    text = "In Cambridge's halls where knowledge flows"
-    data = text_to_binary(text)
-    # data = encode_ldpc(data)
-    signal = encode(data)
-    signal = insert_sync_blocks(signal)
-    write_wav(audio_path, signal)
+    symbols = get_symbols_from_bitstream(DATA)
+    signal = encode(symbols)
+    signal = np.concatenate((get_filter_blocks(), signal))
+    signal = insert_pilot_signals(signal)
+    signal = np.concatenate((np.zeros(SAMPLE_RATE), signal, np.zeros(SAMPLE_RATE)))
+    write_wav(AUDIO_PATH, signal)
 
-    print(f'Bitrate: {round(len(data) * sampleRate / (len(signal) - 2 * sampleRate))} bps')
-    print(f'Bitstream: {len(data)} bits')
-    print(f'Time: {(len(signal) / sampleRate - 2):.2f} seconds')
+    print(f'Bitrate: {round(len(DATA) * SAMPLE_RATE / (len(signal) - 2 * SAMPLE_RATE))} bps')
+    print(f'Bitstream: {len(DATA)} bits')
+    print(f'Time: {(len(signal) / SAMPLE_RATE - 2):.2f} seconds')

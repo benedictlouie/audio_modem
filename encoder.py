@@ -29,9 +29,9 @@ def insert_sync_chirp(signal: np.ndarray) -> np.ndarray:
     """
     sync_chirp = get_sync_chirp()
     blocks = signal.reshape(-1, BLOCK_LENGTH)
-    blocks_with_chirp = np.zeros((blocks.shape[0], BLOCK_LENGTH + SYNC_CHIRP_LENGTH))
-    blocks_with_chirp[:, :SYNC_CHIRP_LENGTH] = sync_chirp
-    blocks_with_chirp[:, SYNC_CHIRP_LENGTH:] = blocks
+    blocks_with_chirp = np.zeros((blocks.shape[0], 2*BLOCK_LENGTH))
+    blocks_with_chirp[:, :BLOCK_LENGTH] = sync_chirp
+    blocks_with_chirp[:, BLOCK_LENGTH:] = blocks
     return blocks_with_chirp.flatten()
 
 def insert_pilot_signals(signal: np.ndarray) -> np.ndarray:
@@ -45,9 +45,10 @@ def get_sync_chirp() -> np.ndarray:
     """
     Generate a synchronization chirp signal.
     """
-    t = np.linspace(0, SYNC_CHIRP_LENGTH / SAMPLE_RATE, SYNC_CHIRP_LENGTH)
-    chirp = CHIRP_FACTOR * np.sin(2 * np.pi * (CHIRP_LOW + (CHIRP_HIGH - CHIRP_LOW) * t * SAMPLE_RATE / SYNC_CHIRP_LENGTH) * t)
-    return chirp
+    syncLength = 2 * (SYMBOLS_PER_BLOCK + 1)
+    t = np.linspace(0, syncLength / SAMPLE_RATE, syncLength)
+    chirp = CHIRP_FACTOR * np.sin(2 * np.pi * (CHIRP_LOW + (CHIRP_HIGH - CHIRP_LOW) * t * SAMPLE_RATE / syncLength) * t)
+    return np.concatenate((chirp[-CYCLIC_PREFIX:], chirp))
 
 def get_pilot_signal() -> np.ndarray:
     """

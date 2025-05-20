@@ -5,19 +5,15 @@ import matplotlib.pyplot as plt
 from scipy.io.wavfile import write
 
 SAMPLE_RATE = 48000
-SYMBOLS_PER_BLOCK = 2047
+SYMBOLS_PER_BLOCK = 1023
 CYCLIC_PREFIX = (SYMBOLS_PER_BLOCK + 1)
-SYNC_CHIRP_LENGTH = 1024
 BLOCK_LENGTH = 2 * (SYMBOLS_PER_BLOCK + 1) + CYCLIC_PREFIX
 
-CHIRP_TIME = 1
-CHIRP_FILTER_DIVISOR = 1500
-CHIRP_FACTOR = 0.15
+CHIRP_TIME = 0.5
+CHIRP_FACTOR = 0.1
 CHIRP_LENGTH = round(CHIRP_TIME * SAMPLE_RATE)
 CHIRP_LOW = 0
 CHIRP_HIGH = 5000
-
-SNR = 10
 
 CONSTELLATION = {
     '00': 0.707 + 0.707j,
@@ -146,7 +142,7 @@ A luminary in academia's sphere,
 His legacy shines, year after year.
 """
 
-DATA = get_non_repeating_bits(SYMBOLS_PER_BLOCK * BITS_PER_CONSTELLATION * 50, 69)
+DATA = get_non_repeating_bits(SYMBOLS_PER_BLOCK * BITS_PER_CONSTELLATION * 100, 69)
 
     
 

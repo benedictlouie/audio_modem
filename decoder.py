@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from utils import *
-from encoder import get_pilot_signal, get_filter_blocks
+from encoder import get_pilot_signal, get_sync_chirp
 
 def decode_block(data: np.ndarray) -> np.ndarray:
     """
@@ -39,35 +39,38 @@ def synchronize(signal: np.ndarray) -> np.ndarray:
     startIndex = np.argmax(np.correlate(signal, pilot))
     endIndex = np.argmax(np.correlate(signal, pilot[::-1]))
 
-    noise_power = np.mean(np.concatenate((signal[:startIndex], signal[endIndex + CHIRP_LENGTH:])) ** 2)
-    signal = signal[startIndex + CHIRP_LENGTH:endIndex]
+    sent = np.concatenate((pilot, pilot[::-1]))
+    received = np.concatenate((signal[startIndex:startIndex + CHIRP_LENGTH], signal[endIndex:endIndex + CHIRP_LENGTH]))
 
-    targetLength = round(len(signal) / BLOCK_LENGTH) * BLOCK_LENGTH
-    # linear interpolations
-    # signal = np.interp(np.linspace(0, len(signal) - 1, targetLength), np.arange(len(signal)), signal)
-    # nearest neighbor interpolation
-    signal = signal[(np.linspace(0, len(signal) - 1, targetLength)).astype(int)]
+    signal = remove_channel(signal, sent, received, SNR, CHIRP_FILTER_DIVISOR)
+
+    totalLength = BLOCK_LENGTH + SYNC_CHIRP_LENGTH
+    signal = signal[startIndex + CHIRP_LENGTH - totalLength//2:endIndex]
     
-    received = signal[:FILTER_BLOCKS * BLOCK_LENGTH]
-    signal = signal[FILTER_BLOCKS * BLOCK_LENGTH:]
-    
-    signal_power = np.mean(signal ** 2)
-    snr = signal_power / noise_power
-    print(f"Signal Power: {signal_power}, Noise Power: {noise_power}, SNR: {snr}")
+    sync_chirp = get_sync_chirp()
+    sync_correlate = np.correlate(signal, sync_chirp)
+    left_bound = 0
+    count = 0
+    output = np.array([])
+    received = np.array([])
+    while left_bound + totalLength < len(signal):
+        index = int(np.argmax(sync_correlate[left_bound:left_bound + totalLength]) + left_bound)
+        left_bound = index + totalLength // 2
 
-    sent = get_filter_blocks()
+        count += 1
+        received = np.concatenate((received, signal[index:index + SYNC_CHIRP_LENGTH]))
+        output = np.concatenate((output, signal[index + SYNC_CHIRP_LENGTH:index + totalLength]))
 
-    if noise_power == 0: return signal
-    return remove_channel(signal, sent, received, snr)
+    return output
 
-def remove_channel(signal: np.ndarray, sent: np.ndarray, received: np.ndarray, snr: float) -> np.ndarray:
+def remove_channel(signal: np.ndarray, sent: np.ndarray, received: np.ndarray, snr: float, filterDivisor: int) -> np.ndarray:
     """
     Remove the channel effect from the received signal using the sent signal.
     """
-    filterLength = BLOCK_LENGTH * FILTER_BLOCKS // FILTER_DIVISOR
+    filterLength = len(sent) // filterDivisor
     filter = np.zeros(filterLength, dtype=complex)
-    for i in range(0, BLOCK_LENGTH * FILTER_BLOCKS, filterLength):
-        filter += get_filter(sent[i:i + filterLength], received[i:i + filterLength], 1) / FILTER_DIVISOR
+    for i in range(0, len(sent) - filterLength + 1, filterLength):
+        filter += get_filter(sent[i:i+filterLength], received[i:i+filterLength], snr) / filterDivisor
     h = np.fft.ifft(filter).real
     h = h[:filterLength // 2]
     plt.plot(h)
@@ -79,10 +82,11 @@ if __name__ == "__main__":
     signal = load_audio_file(AUDIO_PATH)
     signal = synchronize(signal)
 
-    sent = get_symbols_from_bitstream(DATA)
-    received = decode(signal)
+    sent_symbols = get_symbols_from_bitstream(DATA)
+    received_symbols = decode(signal)
+    if len(received_symbols) != len(sent_symbols): exit('synchronization failed')
 
-    plot_sent_received_constellation(sent, received)
+    plot_sent_received_constellation(sent_symbols, received_symbols)
 
-    # received_data = get_bitstream_from_symbols(received_symbols)[:len(DATA)]
-    # print(f'Error Rate: {np.sum(np.array(list(received_data)) != np.array(list(DATA))) / len(DATA) * 100:.2f}%')
+    received_data = get_bitstream_from_symbols(received_symbols)[:len(DATA)]
+    print(f'Error Rate: {np.sum(np.array(list(received_data)) != np.array(list(DATA))) / len(DATA) * 100:.2f}%')

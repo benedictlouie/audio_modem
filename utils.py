@@ -5,20 +5,19 @@ import matplotlib.pyplot as plt
 from scipy.io.wavfile import write
 
 SAMPLE_RATE = 48000
-
-SYMBOLS_PER_BLOCK = 1023
-CYCLIC_PREFIX = 2 * (SYMBOLS_PER_BLOCK + 1)
+SYMBOLS_PER_BLOCK = 2047
+CYCLIC_PREFIX = (SYMBOLS_PER_BLOCK + 1)
+SYNC_CHIRP_LENGTH = 1024
 BLOCK_LENGTH = 2 * (SYMBOLS_PER_BLOCK + 1) + CYCLIC_PREFIX
 
-CHIRP_TIME = 0.05
-CHIRP_FACTOR = 0.03
+CHIRP_TIME = 1
+CHIRP_FILTER_DIVISOR = 1500
+CHIRP_FACTOR = 0.15
 CHIRP_LENGTH = round(CHIRP_TIME * SAMPLE_RATE)
 CHIRP_LOW = 0
 CHIRP_HIGH = 5000
 
-FILTER_BLOCKS = 100
-FILTER_DIVISOR = FILTER_BLOCKS * 32
-FILTER_MULTIPLIER = 0.03
+SNR = 10
 
 CONSTELLATION = {
     '00': 0.707 + 0.707j,
@@ -98,6 +97,11 @@ def plot_sent_received_constellation(sent: np.ndarray, received: np.ndarray) -> 
         mask = sent == sym
         plt.scatter(received[mask].real, received[mask].imag,
                     color=color_map[sym], alpha=0.6, label=f'Received (Sent: {sym})')
+        
+    # Overlay the ideal sent symbols
+    for sym in unique_symbols:
+        plt.plot(sym.real, sym.imag, 'x', markersize=12, markeredgewidth=2,
+                 color=color_map[sym], label=f'Sent: {sym}')
 
     # Formatting
     plt.axhline(0, color='black', linewidth=0.5)
@@ -105,7 +109,7 @@ def plot_sent_received_constellation(sent: np.ndarray, received: np.ndarray) -> 
     plt.grid(True, linestyle='--', alpha=0.6)
     plt.xlabel('Real')
     plt.ylabel('Imaginary')
-    plt.title('Constellation: Sent vs Received')
+    plt.title(f'Constellation: Sent vs Received')
     # plt.legend()
     plt.axis('equal')  # Preserve aspect ratio
     plt.show()
@@ -142,7 +146,7 @@ A luminary in academia's sphere,
 His legacy shines, year after year.
 """
 
-DATA = get_non_repeating_bits(SYMBOLS_PER_BLOCK * BITS_PER_CONSTELLATION * 100, 69)
+DATA = get_non_repeating_bits(SYMBOLS_PER_BLOCK * BITS_PER_CONSTELLATION * 50, 69)
 
     
 

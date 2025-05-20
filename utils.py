@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 from scipy.io.wavfile import write
 
 SAMPLE_RATE = 48000
-SYMBOLS_PER_BLOCK = 1023
-CYCLIC_PREFIX = (SYMBOLS_PER_BLOCK + 1)
+SYMBOLS_PER_BLOCK = 511
+CYCLIC_PREFIX = 512
 BLOCK_LENGTH = 2 * (SYMBOLS_PER_BLOCK + 1) + CYCLIC_PREFIX
 
 CHIRP_TIME = 0.5
@@ -142,7 +142,7 @@ A luminary in academia's sphere,
 His legacy shines, year after year.
 """
 
-DATA = get_non_repeating_bits(SYMBOLS_PER_BLOCK * BITS_PER_CONSTELLATION * 100, 69)
+DATA = get_non_repeating_bits(SYMBOLS_PER_BLOCK * BITS_PER_CONSTELLATION * 200, 69)
 
     
 

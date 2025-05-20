@@ -23,15 +23,6 @@ def decode(signal: np.ndarray, filter: np.ndarray) -> np.ndarray:
         symbols[i * SYMBOLS_PER_BLOCK: (i+1) * SYMBOLS_PER_BLOCK] = decode_block(signal[i * BLOCK_LENGTH: (i+1) * BLOCK_LENGTH], filter)
     return symbols
 
-def get_filter(sent: np.ndarray, received: np.ndarray, snr: float) -> np.ndarray:
-    """
-    Calculate the filter for the channel using the sent and received signals.
-    """
-    S = np.fft.fft(sent)
-    R = np.fft.fft(received)
-    H = R / (S + 1e-10)
-    return np.conjugate(H) / (np.abs(H) ** 2 + 1 / snr)
-
 def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """
     Synchronize the received signal and return the filter.
@@ -44,35 +35,34 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     sync_correlate = np.correlate(signal, sync_chirp)
 
     left_bound = startIndex + CHIRP_LENGTH - BLOCK_LENGTH
-    output = np.array([])
-    received = np.array([])
-    while left_bound + 2*BLOCK_LENGTH < endIndex:
-        index = int(np.argmax(sync_correlate[left_bound:left_bound + 2*BLOCK_LENGTH]) + left_bound)
+    output_blocks = []
+    sent_blocks = []
+    received_blocks = []
+    while left_bound + 2 * BLOCK_LENGTH < endIndex:
+        index = int(np.argmax(sync_correlate[left_bound:left_bound + 2 * BLOCK_LENGTH]) + left_bound)
         left_bound = index + BLOCK_LENGTH
+        output_blocks.append(signal[index + BLOCK_LENGTH:index + 2 * BLOCK_LENGTH])
 
-        received = np.concatenate((received, signal[index:index + BLOCK_LENGTH]))
-        output = np.concatenate((output, signal[index + BLOCK_LENGTH:index + 2*BLOCK_LENGTH]))
-
-    noise_power = np.mean(signal[:startIndex] ** 2)
-    signal_power = np.mean(output ** 2)
-    snr = signal_power / noise_power
-    print(f'noise power: {noise_power}, signal power: {signal_power}, SNR: {snr:.2f}')
+        sent_block = np.array([sync_chirp[i:BLOCK_LENGTH - CYCLIC_PREFIX + i] for i in range(CYCLIC_PREFIX)])
+        received_block = np.array([signal[index + i:index + BLOCK_LENGTH - CYCLIC_PREFIX + i] for i in range(CYCLIC_PREFIX)])
+        sent_blocks.append(sent_block)
+        received_blocks.append(received_block)
+    output = np.concatenate(output_blocks)
+    sent = np.concatenate(sent_blocks)
+    received = np.concatenate(received_blocks)
     
-    received = np.reshape(received, (-1, BLOCK_LENGTH))
-    filter = estimate_filter(sync_chirp[CYCLIC_PREFIX:], received[:, CYCLIC_PREFIX:], snr)
+    filter = estimate_filter(sent, received, 0.1)
     return output, filter
 
 def estimate_filter(sent: np.ndarray, received: np.ndarray, snr: float) -> np.ndarray:
     """
     Remove the channel effect from the received signal using the sent signal.
     """
-    filter = np.zeros(received.shape, dtype=complex)
-    for i in range(received.shape[0]):
-        filter[i] = get_filter(sent, received[i], snr)
+    S = np.fft.fft(sent, axis=1)
+    R = np.fft.fft(received, axis=1)
+    H = R / (S + 1e-10)
+    filter = np.conjugate(H) / (np.abs(H) ** 2 + 1 / snr)
     filter = np.mean(filter, axis=0)
-    # h = np.fft.ifft(filter).real
-    # plt.plot(h)
-    # plt.show()
     return filter
 
 if __name__ == "__main__":
@@ -86,5 +76,5 @@ if __name__ == "__main__":
 
     plot_sent_received_constellation(sent_symbols, received_symbols)
 
-    received_data = get_bitstream_from_symbols(received_symbols)[:len(DATA)]
+    received_data = get_bitstream_from_symbols(received_symbols)
     print(f'Error Rate: {np.sum(np.array(list(received_data)) != np.array(list(DATA))) / len(DATA) * 100:.2f}%')

@@ -1,5 +1,4 @@
 import numpy as np
-from typing import Tuple
 
 import matplotlib.pyplot as plt
 
@@ -17,6 +16,7 @@ def encode(symbols: np.ndarray) -> np.ndarray:
     """
     Encode a bitstream into a time-domain signal using IFFT and add a cyclic prefix.
     """
+    symbols = np.concatenate((symbols, np.repeat(CONSTELLATION['0' * BITS_PER_CONSTELLATION], (-len(symbols)) % SYMBOLS_PER_BLOCK)))
     blockCount = len(symbols) // SYMBOLS_PER_BLOCK
     signal = np.zeros(blockCount * BLOCK_LENGTH)
     for i in range(blockCount):

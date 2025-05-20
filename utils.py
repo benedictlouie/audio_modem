@@ -2,7 +2,9 @@ import contextlib
 import librosa
 import numpy as np
 import matplotlib.pyplot as plt
+import pyldpc
 from scipy.io.wavfile import write
+from tqdm import tqdm
 
 SAMPLE_RATE = 48000
 SYMBOLS_PER_BLOCK = 511
@@ -27,6 +29,13 @@ REV_CONSTELLATION = {coord: bits for bits, coord in CONSTELLATION.items()}
 
 AUDIO_PATH = "output.wav"
 
+N = 15
+D_V = 4
+D_C = 5
+SNR = 0.1
+H, G = pyldpc.make_ldpc(N, D_V, D_C, sparse=True, seed=0)
+K = G.shape[1]
+
 def load_audio_file(file_path: str) -> np.ndarray:
     with contextlib.redirect_stderr(None):
         return librosa.load(file_path, sr=None)[0]
@@ -37,8 +46,7 @@ def write_wav(filename: str, data: np.ndarray, sample_rate: int = SAMPLE_RATE) -
 
 def get_non_repeating_bits(n: int, seed: int) -> str:
     rng = np.random.default_rng(seed=seed)
-    bits = rng.integers(0, 2, size=n)
-    return ''.join(map(str, bits))
+    return rng.integers(0, 2, size=n)
 
 def get_white_noise(n: int, seed: int) -> np.ndarray:
     rng = np.random.default_rng(seed=seed)
@@ -62,16 +70,29 @@ def get_bitstream_from_symbols(symbols: np.ndarray) -> str:
     """
     Convert symbols to a bitstream using the constellation mapping.
     """
-    return ''.join([decode_constellation(symbol) for symbol in symbols])
+    encoded_bitstream = np.empty(len(symbols) * BITS_PER_CONSTELLATION)
+    encoded_bitstream[::2] = symbols.real
+    encoded_bitstream[1::2] = symbols.imag
+    
+    encoded_bitstream = encoded_bitstream[:(len(encoded_bitstream) // N) * N]
+    bitstream = np.array([])
+    for i in tqdm(range(0, len(encoded_bitstream), N)):
+        bitstream = np.concatenate((bitstream, pyldpc.get_message(G, pyldpc.decode(H, encoded_bitstream[i:i + N], SNR))))
+    return bitstream
+    
 
 def get_symbols_from_bitstream(bitstream: str) -> np.ndarray:
     """
     Convert a bitstream to symbols using the constellation mapping.
     """
-    symbols = np.array([])
-    for i in range(0, len(bitstream), BITS_PER_CONSTELLATION):
-        symbols = np.append(symbols, CONSTELLATION[bitstream[i:i+BITS_PER_CONSTELLATION]])
-    return np.concatenate((symbols, np.repeat(CONSTELLATION['0' * BITS_PER_CONSTELLATION], (-len(symbols)) % SYMBOLS_PER_BLOCK)))
+    bitstream = np.concatenate((bitstream, np.zeros((-len(bitstream)) % K)))
+
+    encoded_bitstream = np.array([])
+    for i in range(0, len(bitstream), K):
+        encoded_bitstream = np.concatenate((encoded_bitstream, pyldpc.encode(G, bitstream[i:i + K], float('inf'))))
+    
+    symbols = np.round(encoded_bitstream[::2]) + 1j * np.round(encoded_bitstream[1::2])
+    return symbols
 
 def plot_sent_received_constellation(sent: np.ndarray, received: np.ndarray) -> None:
     """
@@ -142,7 +163,4 @@ A luminary in academia's sphere,
 His legacy shines, year after year.
 """
 
-DATA = get_non_repeating_bits(SYMBOLS_PER_BLOCK * BITS_PER_CONSTELLATION * 200, 69)
-
-    
-
+DATA = get_non_repeating_bits(SYMBOLS_PER_BLOCK * BITS_PER_CONSTELLATION * 100, 69)

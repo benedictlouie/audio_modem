@@ -1,7 +1,5 @@
 import numpy as np
 
-import matplotlib.pyplot as plt
-
 from utils import *
 
 def encode_block(symbols: np.ndarray) -> np.ndarray:

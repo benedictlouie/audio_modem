@@ -125,5 +125,5 @@ if __name__ == "__main__":
 
     plot_sent_received_constellation(sent_symbols, received_symbols)
 
-    received_data = get_bitstream_from_symbols(received_symbols)
-    print(f'Error Rate: {np.sum(np.array(list(received_data)) != np.array(list(DATA))) / len(DATA) * 100:.2f}%')
+    received_data = get_bitstream_from_symbols(received_symbols)[:len(DATA)]
+    print(f'Error Rate: {np.sum(received_data != DATA) / len(DATA) * 100:.2f}%')

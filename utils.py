@@ -1,7 +1,8 @@
 import contextlib
+import ldpc
 import librosa
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from scipy.io.wavfile import write
 
 SAMPLE_RATE = 48000
@@ -30,6 +31,9 @@ REV_CONSTELLATION = {coord: bits for bits, coord in CONSTELLATION.items()}
 
 AUDIO_PATH = "output.wav"
 
+DECTYPE = 'sumprod2'
+CODE = ldpc.code()
+
 def load_audio_file(file_path: str) -> np.ndarray:
     with contextlib.redirect_stderr(None):
         return librosa.load(file_path, sr=None)[0]
@@ -40,41 +44,42 @@ def write_wav(filename: str, data: np.ndarray, sample_rate: int = SAMPLE_RATE) -
 
 def get_non_repeating_bits(n: int, seed: int) -> str:
     rng = np.random.default_rng(seed=seed)
-    bits = rng.integers(0, 2, size=n)
-    return ''.join(map(str, bits))
+    return rng.integers(0, 2, size=n)
 
 def get_white_noise(n: int, seed: int) -> np.ndarray:
     rng = np.random.default_rng(seed=seed)
     noise = rng.normal(0, 1, n)
     return noise
 
-def decode_constellation(z: complex) -> str:
-    """
-    Decode a complex number to its corresponding bit representation.
-    """
-    closestConstellation = None
-    minDist = float('inf')
-    for constellation in REV_CONSTELLATION:
-        dist = np.abs(z - constellation)
-        if dist < minDist:
-            minDist = dist
-            closestConstellation = constellation
-    return REV_CONSTELLATION[closestConstellation]
-
 def get_bitstream_from_symbols(symbols: np.ndarray) -> str:
     """
     Convert symbols to a bitstream using the constellation mapping.
     """
-    return ''.join([decode_constellation(symbol) for symbol in symbols])
+    encoded_bitstream = np.empty(len(symbols) * BITS_PER_CONSTELLATION)
+    encoded_bitstream[::2] = symbols.real
+    encoded_bitstream[1::2] = symbols.imag
+    
+    encoded_bitstream = encoded_bitstream[:(len(encoded_bitstream) // CODE.N) * CODE.N]
+    bitstream = np.array([])
+    for i in range(0, len(encoded_bitstream), CODE.N):
+        bitstream = np.concatenate((bitstream, CODE.decode(encoded_bitstream[i:i + CODE.N], DECTYPE)[0][:CODE.K]))
+
+    bitstream = np.where(bitstream > 0, 0, 1)
+    return bitstream
+    
 
 def get_symbols_from_bitstream(bitstream: str) -> np.ndarray:
     """
     Convert a bitstream to symbols using the constellation mapping.
     """
-    symbols = np.array([])
-    for i in range(0, len(bitstream), BITS_PER_CONSTELLATION):
-        symbols = np.append(symbols, CONSTELLATION[bitstream[i:i+BITS_PER_CONSTELLATION]])
-    return np.concatenate((symbols, np.repeat(CONSTELLATION['0' * BITS_PER_CONSTELLATION], (-len(symbols)) % SYMBOLS_PER_BLOCK)))
+    bitstream = np.concatenate((bitstream, np.zeros((-len(bitstream)) % CODE.K)))
+    encoded_bitstream = np.array([])
+    for i in range(0, len(bitstream), CODE.K):
+        encoded_bitstream = np.concatenate((encoded_bitstream, CODE.encode(bitstream[i:i + CODE.K])))
+    
+    encoded_bitstream = np.where(encoded_bitstream == 0, 1, -1)
+    symbols = np.round(encoded_bitstream[::2]) + 1j * np.round(encoded_bitstream[1::2])
+    return symbols
 
 def plot_sent_received_constellation(sent: np.ndarray, received: np.ndarray) -> None:
     """
@@ -83,34 +88,27 @@ def plot_sent_received_constellation(sent: np.ndarray, received: np.ndarray) -> 
     """
 
     unique_symbols = np.unique(sent)
-
-    # Assign a color to each type
-    colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'cyan', 'magenta']
+    colors = ['red', 'blue', 'green', 'orange']
     color_map = dict(zip(unique_symbols, colors))
 
-    # Prepare plot
     plt.figure(figsize=(8, 8))
 
-    # Plot received symbols, colored by sent symbol type
     for sym in unique_symbols:
         mask = sent == sym
         plt.scatter(received[mask].real, received[mask].imag,
                     color=color_map[sym], alpha=0.6, label=f'Received (Sent: {sym})')
-        
-    # Overlay the ideal sent symbols
+
     for sym in unique_symbols:
         plt.plot(sym.real, sym.imag, 'x', markersize=12, markeredgewidth=2,
                  color=color_map[sym], label=f'Sent: {sym}')
 
-    # Formatting
     plt.axhline(0, color='black', linewidth=0.5)
     plt.axvline(0, color='black', linewidth=0.5)
     plt.grid(True, linestyle='--', alpha=0.6)
     plt.xlabel('Real')
     plt.ylabel('Imaginary')
     plt.title(f'Constellation: Sent vs Received')
-    # plt.legend()
-    plt.axis('equal')  # Preserve aspect ratio
+    plt.axis('equal')
     plt.show()
 
 def text_to_binary(text: str) -> str:

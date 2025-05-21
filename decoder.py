@@ -113,13 +113,13 @@ def estimate_filter(sent: np.ndarray, received: np.ndarray, snr: float) -> np.nd
     return filter
 
 if __name__ == "__main__":
-    # AUDIO_PATH = "New Recording 15.m4a"
+    # AUDIO_PATH = "Downing College.m4a"
     signal = load_audio_file(AUDIO_PATH)
     signal, filter = synchronize(signal)
     # signal, filter = synchronizeAA(signal)
 
     sent_symbols = get_symbols_from_bitstream(DATA)
-    received_symbols = decode(signal, filter)
+    received_symbols = decode(signal, filter)[:len(sent_symbols)]
 
     if len(received_symbols) != len(sent_symbols): exit('synchronization failed')
 

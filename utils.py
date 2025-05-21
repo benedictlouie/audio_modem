@@ -6,15 +6,15 @@ import numpy as np
 from scipy.io.wavfile import write
 
 SAMPLE_RATE = 48000
-SYMBOLS_PER_BLOCK = 2 ** 10 - 1
-CYCLIC_PREFIX = 2 ** 9
+SYMBOLS_PER_BLOCK = 2 ** 12 - 1
+CYCLIC_PREFIX = 2 ** 10
 BLOCK_LENGTH = 2 * (SYMBOLS_PER_BLOCK + 1) + CYCLIC_PREFIX
 
-ESTIMATE_CHANNEL_BLOCKS = 200
-INFORMATION_BLOCKS = 4
-BLOCKS_PER_SYNC = 10
+ESTIMATE_CHANNEL_BLOCKS = 10
+INFORMATION_BLOCKS = 1
+BLOCKS_PER_SYNC = 1
 
-WIENER_SNR = 0.1
+WIENER_SNR = 1
 
 START_END_CHIRP_TIME = 0.4
 SYNC_CHIRP_TIME = 0.2
@@ -98,12 +98,14 @@ def plot_sent_received_constellation(sent: np.ndarray, received: np.ndarray) -> 
         plt.plot(sym.real, sym.imag, 'x', markersize=12, markeredgewidth=2,
                  color=color_map[sym], label=f'Sent: {sym}')
 
+    accuracy = np.mean(sent == np.sign(received.real) + 1j * np.sign(received.imag))
+
     plt.axhline(0, color='black', linewidth=0.5)
     plt.axvline(0, color='black', linewidth=0.5)
     plt.grid(True, linestyle='--', alpha=0.6)
     plt.xlabel('Real')
     plt.ylabel('Imaginary')
-    plt.title(f'Constellation: Sent vs Received')
+    plt.title(f'Constellation: Sent vs Received. Accuracy: {accuracy:.4f}.')
     plt.axis('equal')
     plt.show()
 
@@ -140,4 +142,4 @@ His legacy shines, year after year.
 """
 
 ESTIMATE_CHANNEL_DATA = get_non_repeating_bits(SYMBOLS_PER_BLOCK * BITS_PER_CONSTELLATION * ESTIMATE_CHANNEL_BLOCKS, 1)
-DATA = get_non_repeating_bits(SYMBOLS_PER_BLOCK * BITS_PER_CONSTELLATION * INFORMATION_BLOCKS, 2)
+DATA = get_non_repeating_bits(SYMBOLS_PER_BLOCK * BITS_PER_CONSTELLATION * INFORMATION_BLOCKS // 648 * 324, 2)

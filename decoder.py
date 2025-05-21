@@ -35,7 +35,7 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         left_bound = index + totalLength // 2
         received_blocks = np.vstack((received_blocks, signal[index + SYNC_CHIRP_LENGTH:index + totalLength].reshape(-1, BLOCK_LENGTH)))
     sync_diff = np.diff(sync_indices)
-    print(f'Mean Sync Diff: {np.mean(sync_diff):.2f}, Std Sync Diff: {np.std(sync_diff):.2f}')
+    print(f'Total Length: {totalLength}, Mean Sync Diff: {np.mean(sync_diff):.2f}, Std Sync Diff: {np.std(sync_diff):.2f}')
     
     sent_channel_estimate_blocks = encode(get_symbols_from_bitstream(ESTIMATE_CHANNEL_DATA, skip_encoding=True)).reshape(-1, BLOCK_LENGTH)
     received_channel_estimate_blocks = received_blocks[:ESTIMATE_CHANNEL_BLOCKS, :]
@@ -46,15 +46,8 @@ def estimate_filter(sent_blocks: np.ndarray, receive_blocks: np.ndarray, snr: fl
     """
     Remove the channel effect from the received signal using the sent signal.
     """
-    # filterLength = BLOCK_LENGTH - CYCLIC_PREFIX
-    # sent = np.empty((0, filterLength))
-    # received = np.empty((0, filterLength))
-    # for i in range(CYCLIC_PREFIX):
-    #     sent = np.vstack((sent, sent_blocks[:, i:i + filterLength]))
-    #     received = np.vstack((received, receive_blocks[:, i:i + filterLength]))
-    
-    sent = sent_blocks[:, CYCLIC_PREFIX:]
-    received = receive_blocks[:, CYCLIC_PREFIX:]
+    sent = np.vstack((sent_blocks[:, CYCLIC_PREFIX:], sent_blocks[:, :-CYCLIC_PREFIX]))
+    received = np.vstack((receive_blocks[:, CYCLIC_PREFIX:], receive_blocks[:, :-CYCLIC_PREFIX]))
 
     S = np.fft.fft(sent, axis=1)
     R = np.fft.fft(received, axis=1)

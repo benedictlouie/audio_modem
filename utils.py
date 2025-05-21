@@ -6,15 +6,24 @@ import numpy as np
 from scipy.io.wavfile import write
 
 SAMPLE_RATE = 48000
-SYMBOLS_PER_BLOCK = 511
-CYCLIC_PREFIX = 512
+SYMBOLS_PER_BLOCK = 2 ** 10 - 1
+CYCLIC_PREFIX = 2 ** 9
 BLOCK_LENGTH = 2 * (SYMBOLS_PER_BLOCK + 1) + CYCLIC_PREFIX
 
-CHIRP_TIME = 0.5
-CHIRP_FACTOR = 0.1
-CHIRP_LENGTH = round(CHIRP_TIME * SAMPLE_RATE)
+ESTIMATE_CHANNEL_BLOCKS = 200
+INFORMATION_BLOCKS = 4
+BLOCKS_PER_SYNC = 10
+
+WIENER_SNR = 0.1
+
+START_END_CHIRP_TIME = 0.4
+SYNC_CHIRP_TIME = 0.2
+START_END_CHIRP_LENGTH = round(START_END_CHIRP_TIME * SAMPLE_RATE)
+SYNC_CHIRP_LENGTH = round(SYNC_CHIRP_TIME * SAMPLE_RATE)
+CHIRP_FACTOR = 0.04
 CHIRP_LOW = 0
 CHIRP_HIGH = 5000
+
 
 BITS_PER_CONSTELLATION = 2
 
@@ -35,11 +44,6 @@ def get_non_repeating_bits(n: int, seed: int) -> str:
     rng = np.random.default_rng(seed=seed)
     return rng.integers(0, 2, size=n)
 
-def get_white_noise(n: int, seed: int) -> np.ndarray:
-    rng = np.random.default_rng(seed=seed)
-    noise = rng.normal(0, 1, n)
-    return noise
-
 def get_bitstream_from_symbols(symbols: np.ndarray) -> str:
     """
     Convert symbols to a bitstream using the constellation mapping.
@@ -57,17 +61,20 @@ def get_bitstream_from_symbols(symbols: np.ndarray) -> str:
     return bitstream
     
 
-def get_symbols_from_bitstream(bitstream: str) -> np.ndarray:
+def get_symbols_from_bitstream(bitstream: str, skip_encoding: bool = False) -> np.ndarray:
     """
     Convert a bitstream to symbols using the constellation mapping.
     """
-    bitstream = np.concatenate((bitstream, np.zeros((-len(bitstream)) % CODE.K)))
-    encoded_bitstream = np.array([])
-    for i in range(0, len(bitstream), CODE.K):
-        encoded_bitstream = np.concatenate((encoded_bitstream, CODE.encode(bitstream[i:i + CODE.K])))
-    
+    if skip_encoding:
+        encoded_bitstream = bitstream
+    else:
+        bitstream = np.concatenate((bitstream, np.zeros((-len(bitstream)) % CODE.K)))
+        encoded_bitstream = np.array([])
+        for i in range(0, len(bitstream), CODE.K):
+            encoded_bitstream = np.concatenate((encoded_bitstream, CODE.encode(bitstream[i:i + CODE.K])))
+
     encoded_bitstream = np.where(encoded_bitstream == 0, 1, -1)
-    symbols = np.round(encoded_bitstream[::2]) + 1j * np.round(encoded_bitstream[1::2])
+    symbols = encoded_bitstream[::2] + 1j * encoded_bitstream[1::2]
     return symbols
 
 def plot_sent_received_constellation(sent: np.ndarray, received: np.ndarray) -> None:
@@ -132,4 +139,5 @@ A luminary in academia's sphere,
 His legacy shines, year after year.
 """
 
-DATA = get_non_repeating_bits(SYMBOLS_PER_BLOCK * BITS_PER_CONSTELLATION * 100, 69)
+ESTIMATE_CHANNEL_DATA = get_non_repeating_bits(SYMBOLS_PER_BLOCK * BITS_PER_CONSTELLATION * ESTIMATE_CHANNEL_BLOCKS, 1)
+DATA = get_non_repeating_bits(SYMBOLS_PER_BLOCK * BITS_PER_CONSTELLATION * INFORMATION_BLOCKS, 2)

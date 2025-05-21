@@ -31,30 +31,31 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     pilot = get_pilot_signal()
     startIndex = np.argmax(np.correlate(signal, pilot))
     endIndex = np.argmax(np.correlate(signal, pilot[::-1]))
+    print(startIndex, endIndex)
     
     sync_chirp = get_sync_chirp()
     sync_correlate = np.correlate(signal, sync_chirp)
-    plt.plot(sync_correlate)
-    plt.show()
 
     left_bound = startIndex + CHIRP_LENGTH - BLOCK_LENGTH
-    received = np.array([])
-    output = np.array([])
+
+    output_blocks = []
+    sent_blocks = []
+    received_blocks = []
     while left_bound + 2 * BLOCK_LENGTH < endIndex:
         index = int(np.argmax(sync_correlate[left_bound:left_bound + 2 * BLOCK_LENGTH]) + left_bound)
         left_bound = index + BLOCK_LENGTH
-        print(index-startIndex)
-        received = np.concatenate((received, signal[index:index + BLOCK_LENGTH]))
-        output = np.concatenate((output, signal[index + BLOCK_LENGTH:index + 2*BLOCK_LENGTH]))
+        output_blocks.append(signal[index + BLOCK_LENGTH:index + 2 * BLOCK_LENGTH])
 
-    noise_power = np.mean(signal[:startIndex] ** 2)
-    signal_power = np.mean(output ** 2)
-    snr = signal_power / noise_power
-    snr_db = 10 * np.log10(snr)
-    print(f'noise power: {noise_power}, signal power: {signal_power}, SNR: {snr_db:.2f} dB')
+        sent_block = np.array([sync_chirp[i:BLOCK_LENGTH - CYCLIC_PREFIX + i] for i in range(CYCLIC_PREFIX)])
+        received_block = np.array([signal[index + i:index + BLOCK_LENGTH - CYCLIC_PREFIX + i] for i in range(CYCLIC_PREFIX)])
+        sent_blocks.append(sent_block)
+        received_blocks.append(received_block)
 
-    received = np.reshape(received, (-1, BLOCK_LENGTH))
-    filter = estimate_filter(sync_chirp[CYCLIC_PREFIX:], received[:, CYCLIC_PREFIX:], 0.1)
+    output = np.concatenate(output_blocks)
+    sent = np.concatenate(sent_blocks)
+    received = np.concatenate(received_blocks)
+    
+    filter = estimate_filter(sent, received, 0.1)
     return output, filter
 
 def synchronizeAA(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -105,6 +106,9 @@ def estimate_filter(sent: np.ndarray, received: np.ndarray, snr: float) -> np.nd
     S = np.fft.fft(sent)
     R = np.fft.fft(received)
     H = R / (S + 1e-10)
+    # plt.plot((1/H[0]).real)
+    # plt.plot((1/H[0]).imag)
+    # plt.show()
     filter = np.conjugate(H) / (np.abs(H) ** 2 + 1 / snr)
     filter = np.mean(filter, axis=0)
     plt.plot(filter.real)
@@ -113,8 +117,11 @@ def estimate_filter(sent: np.ndarray, received: np.ndarray, snr: float) -> np.nd
     return filter
 
 if __name__ == "__main__":
-    # AUDIO_PATH = "Downing College.m4a"
-    signal = load_audio_file(AUDIO_PATH)
+    RECEIVED_AUDIO = AUDIO_PATH
+    # RECEIVED_AUDIO = "noisy.wav"
+    # RECEIVED_AUDIO = "Downing College.m4a"
+    
+    signal = load_audio_file(RECEIVED_AUDIO)
     signal, filter = synchronize(signal)
     # signal, filter = synchronizeAA(signal)
 
@@ -125,5 +132,7 @@ if __name__ == "__main__":
 
     plot_sent_received_constellation(sent_symbols, received_symbols)
 
+    print("Constellation correctness:", np.sum([decode_constellation(rs) == decode_constellation(ss) for rs, ss in zip(received_symbols, sent_symbols)]) / len(sent_symbols))
+
     received_data = get_bitstream_from_symbols(received_symbols)[:len(DATA)]
-    print(f'Error Rate: {np.sum(received_data != DATA) / len(DATA) * 100:.2f}%')
+    print("Bit error rate:", np.sum([rd != sd for rd,sd in zip(received_data, DATA)])/ len(DATA))

@@ -21,7 +21,7 @@ def encode(symbols: np.ndarray) -> np.ndarray:
     signal = np.zeros(blockCount * BLOCK_LENGTH)
     for i in range(blockCount):
         signal[i * BLOCK_LENGTH : (i+1) * BLOCK_LENGTH] = encode_block(symbols[i * SYMBOLS_PER_BLOCK : (i+1) * SYMBOLS_PER_BLOCK])
-    return signal / np.max(np.abs(signal))
+    return signal #/ np.max(np.abs(signal))
 
 def insert_sync_chirp(signal: np.ndarray) -> np.ndarray:
     """
@@ -34,6 +34,14 @@ def insert_sync_chirp(signal: np.ndarray) -> np.ndarray:
     blocks_with_chirp[:, BLOCK_LENGTH:] = blocks
     return blocks_with_chirp.flatten()
 
+def insert_aa_preamble(signal: np.ndarray) -> np.ndarray:
+    preamble = get_aa_preamble()
+    blocks = signal.reshape(-1, BLOCK_LENGTH)
+    blocks_with_preamble = np.zeros((blocks.shape[0], 2*BLOCK_LENGTH))
+    blocks_with_preamble[:, :BLOCK_LENGTH] = preamble
+    blocks_with_preamble[:, BLOCK_LENGTH:] = blocks
+    return blocks_with_preamble.flatten()
+
 def insert_pilot_signals(signal: np.ndarray) -> np.ndarray:
     """
     Insert pilot signals at the beginning and end of the signal.
@@ -41,9 +49,21 @@ def insert_pilot_signals(signal: np.ndarray) -> np.ndarray:
     pilot = get_pilot_signal()
     return np.concatenate((pilot, signal, pilot[::-1]))
 
+def get_aa_preamble() -> np.ndarray:
+    fourier = np.random.RandomState(39).rand(N_DFT//2)
+    fourier -= 0.5
+    fourier *= 8
+    fourier[1::2] = 0
+    fourier = np.concatenate((fourier, np.conjugate(fourier)))
+    aa = np.fft.ifft(fourier).real
+    aa = np.concatenate((aa[-CYCLIC_PREFIX:], aa))
+    plt.plot(aa)
+    plt.show()
+    return aa
+    
 def get_sync_chirp() -> np.ndarray:
     """
-    Generate a synchronization chirp signal.
+    Generate a synchronization chirp signal with cyclic prefix
     """
     syncLength = 2 * (SYMBOLS_PER_BLOCK + 1)
     t = np.linspace(0, syncLength / SAMPLE_RATE, syncLength)
@@ -62,6 +82,8 @@ if __name__ == "__main__":
     symbols = get_symbols_from_bitstream(DATA)
     signal = encode(symbols)
     signal = insert_sync_chirp(signal)
+    # signal = insert_aa_preamble(signal)
+
     signal = insert_pilot_signals(signal)
     signal = np.concatenate((np.zeros(SAMPLE_RATE), signal, np.zeros(SAMPLE_RATE)))
     write_wav(AUDIO_PATH, signal)

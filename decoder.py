@@ -3,13 +3,14 @@ import matplotlib.pyplot as plt
 from typing import Tuple
 
 from utils import *
-from encoder import get_pilot_signal, get_sync_chirp
+from encoder import get_pilot_signal, get_sync_chirp, get_aa_preamble
 
 def decode_block(data: np.ndarray, filter: np.ndarray) -> np.ndarray:
     """
     Decode a block of data using FFT and extract the symbols.
     """
-    fourier = np.fft.fft(data[CYCLIC_PREFIX:]) * filter
+    fourier = np.fft.fft(data[CYCLIC_PREFIX:])
+    fourier *= filter
     return fourier[1:SYMBOLS_PER_BLOCK + 1]
 
 def decode(signal: np.ndarray, filter: np.ndarray) -> np.ndarray:
@@ -33,45 +34,93 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     
     sync_chirp = get_sync_chirp()
     sync_correlate = np.correlate(signal, sync_chirp)
+    plt.plot(sync_correlate)
+    plt.show()
 
     left_bound = startIndex + CHIRP_LENGTH - BLOCK_LENGTH
-    output_blocks = []
-    sent_blocks = []
-    received_blocks = []
+    received = np.array([])
+    output = np.array([])
     while left_bound + 2 * BLOCK_LENGTH < endIndex:
         index = int(np.argmax(sync_correlate[left_bound:left_bound + 2 * BLOCK_LENGTH]) + left_bound)
         left_bound = index + BLOCK_LENGTH
-        output_blocks.append(signal[index + BLOCK_LENGTH:index + 2 * BLOCK_LENGTH])
+        print(index-startIndex)
+        received = np.concatenate((received, signal[index:index + BLOCK_LENGTH]))
+        output = np.concatenate((output, signal[index + BLOCK_LENGTH:index + 2*BLOCK_LENGTH]))
 
-        sent_block = np.array([sync_chirp[i:BLOCK_LENGTH - CYCLIC_PREFIX + i] for i in range(CYCLIC_PREFIX)])
-        received_block = np.array([signal[index + i:index + BLOCK_LENGTH - CYCLIC_PREFIX + i] for i in range(CYCLIC_PREFIX)])
-        sent_blocks.append(sent_block)
-        received_blocks.append(received_block)
-    output = np.concatenate(output_blocks)
-    sent = np.concatenate(sent_blocks)
-    received = np.concatenate(received_blocks)
-    
-    filter = estimate_filter(sent, received, 0.1)
+    noise_power = np.mean(signal[:startIndex] ** 2)
+    signal_power = np.mean(output ** 2)
+    snr = signal_power / noise_power
+    snr_db = 10 * np.log10(snr)
+    print(f'noise power: {noise_power}, signal power: {signal_power}, SNR: {snr_db:.2f} dB')
+
+    received = np.reshape(received, (-1, BLOCK_LENGTH))
+    filter = estimate_filter(sync_chirp[CYCLIC_PREFIX:], received[:, CYCLIC_PREFIX:], 0.1)
     return output, filter
+
+def synchronizeAA(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    pilot = get_pilot_signal()
+    startIndex = np.argmax(np.correlate(signal, pilot))
+    endIndex = np.argmax(np.correlate(signal, pilot[::-1]))
+    
+    plt.plot(np.convolve(signal, np.ones(300)/300, mode='same'))
+    plt.show()
+
+    output = np.array([])
+    leftBound = startIndex + CHIRP_LENGTH
+    print(startIndex, CHIRP_LENGTH)
+
+    while leftBound < endIndex:
+        cor = []
+        for i in range(leftBound - BLOCK_LENGTH, leftBound + BLOCK_LENGTH):
+            P = np.sum(signal[i: i+N_DFT//2] * signal[i+N_DFT//2: i+N_DFT])
+            R = np.sum(signal[i+N_DFT//2: i+N_DFT] ** 2)
+            cor.append(abs(P)**2 / R**2)
+        plt.plot(cor)
+        kernel = np.ones(CYCLIC_PREFIX) / CYCLIC_PREFIX
+        cor = np.convolve(cor, kernel, mode='same')
+        plt.plot(cor)
+        plt.plot(signal[leftBound-BLOCK_LENGTH: leftBound+BLOCK_LENGTH])
+        plt.show()
+
+        # leftBound = leftBound - BLOCK_LENGTH + np.argmax(cor) - CYCLIC_PREFIX//2 + BLOCK_LENGTH
+        leftBound += BLOCK_LENGTH
+        # print(np.argmax(cor), BLOCK_LENGTH, leftBound)
+        output = np.concatenate((output, signal[leftBound: leftBound+BLOCK_LENGTH]))
+        leftBound += BLOCK_LENGTH
+
+    # noise_power = np.mean(signal[:startIndex] ** 2)
+    # signal_power = np.mean(output ** 2)
+    # snr = signal_power / noise_power
+    # snr_db = 10 * np.log10(snr)
+    # print(f'noise power: {noise_power}, signal power: {signal_power}, SNR: {snr_db:.2f} dB')
+    # received = np.reshape(received, (-1, BLOCK_LENGTH))
+
+    return output, np.ones(N_DFT)
+
 
 def estimate_filter(sent: np.ndarray, received: np.ndarray, snr: float) -> np.ndarray:
     """
     Remove the channel effect from the received signal using the sent signal.
     """
-    S = np.fft.fft(sent, axis=1)
-    R = np.fft.fft(received, axis=1)
+    S = np.fft.fft(sent)
+    R = np.fft.fft(received)
     H = R / (S + 1e-10)
     filter = np.conjugate(H) / (np.abs(H) ** 2 + 1 / snr)
     filter = np.mean(filter, axis=0)
+    plt.plot(filter.real)
+    plt.plot(filter.imag)
+    plt.show()
     return filter
 
 if __name__ == "__main__":
-    AUDIO_PATH = "Downing College.m4a"
+    # AUDIO_PATH = "New Recording 15.m4a"
     signal = load_audio_file(AUDIO_PATH)
     signal, filter = synchronize(signal)
+    # signal, filter = synchronizeAA(signal)
 
     sent_symbols = get_symbols_from_bitstream(DATA)
     received_symbols = decode(signal, filter)
+
     if len(received_symbols) != len(sent_symbols): exit('synchronization failed')
 
     plot_sent_received_constellation(sent_symbols, received_symbols)

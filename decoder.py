@@ -69,10 +69,11 @@ if __name__ == "__main__":
     AUDIO_PATH = "Downing College.m4a"
     signal = load_audio_file(AUDIO_PATH)
     signal, filter = synchronize(signal)
-    received_symbols = decode(signal, filter)
-    sent_symbols = get_symbols_from_bitstream(DATA)
 
-    plot_sent_received_constellation(sent_symbols, received_symbols[:len(sent_symbols)])
+    sent_symbols = get_symbols_from_bitstream(DATA)
+    received_symbols = decode(signal, filter)[:len(sent_symbols)]
+
+    plot_sent_received_constellation(sent_symbols, received_symbols)
 
     received_data = get_bitstream_from_symbols(received_symbols)[:len(DATA)]
     print(f'Error Rate: {np.sum(received_data != DATA) / len(DATA) * 100:.2f}%')

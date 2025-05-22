@@ -25,7 +25,7 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     sync_correlate = np.correlate(signal, sync_signal)
 
     totalLength = SYNC_CHIRP_LENGTH + BLOCK_LENGTH * BLOCKS_PER_SYNC
-    left_bound = startIndex + START_END_CHIRP_LENGTH - totalLength//2
+    left_bound = startIndex + CHIRP_LENGTH - totalLength//2
     received_blocks = np.empty((0, BLOCK_LENGTH))
 
     sync_indices = []

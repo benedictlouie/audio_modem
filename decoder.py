@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from typing import Tuple
 
 from utils import *
-from encoder import encode, get_sync_signal, get_start_end_signal
+from encoder import encode, get_known_blocks, get_chirp
 
 def decode(signal: np.ndarray, filter: np.ndarray) -> np.ndarray:
     """
@@ -17,56 +17,59 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """
     Synchronize the received signal and return the filter.
     """
-    start_end_signal = get_start_end_signal()
-    startIndex = np.argmax(np.correlate(signal, start_end_signal))
-    endIndex = np.argmax(np.correlate(signal, start_end_signal[::-1]))
+    chirp_signal = get_chirp()
+    startIndex = np.argmax(np.correlate(signal, chirp_signal[::-1]))
+    endIndex = np.argmax(np.correlate(signal, chirp_signal))
     
-    sync_signal = get_sync_signal()
-    sync_correlate = np.correlate(signal, sync_signal)
+    known_blocks = get_known_blocks()
 
-    totalLength = SYNC_CHIRP_LENGTH + BLOCK_LENGTH * BLOCKS_PER_SYNC
-    left_bound = startIndex + CHIRP_LENGTH - totalLength//2
-    received_blocks = np.empty((0, BLOCK_LENGTH))
+    frameLength = 2 * BLOCK_LENGTH
+    left_bound = startIndex + CHIRP_LENGTH - frameLength//2
+
+    received_known_blocks = np.empty((0, BLOCK_LENGTH))
+    received_information_blocks = np.empty((0, BLOCK_LENGTH))
 
     sync_indices = []
-    while left_bound + totalLength < endIndex:
-        index = int(np.argmax(sync_correlate[left_bound:left_bound + totalLength]) + left_bound)
+    current_index = 0
+    while left_bound + frameLength < endIndex:
+        index = int(np.argmax(np.correlate(signal[left_bound:left_bound + frameLength], known_blocks[current_index]))) + left_bound
         sync_indices.append(index)
-        left_bound = index + totalLength // 2
-        received_blocks = np.vstack((received_blocks, signal[index + SYNC_CHIRP_LENGTH:index + totalLength].reshape(-1, BLOCK_LENGTH)))
+        left_bound = index + frameLength // 2
+        
+        received_known_blocks = np.vstack((received_known_blocks, signal[index:index + BLOCK_LENGTH]))
+        received_information_blocks = np.vstack((received_information_blocks, signal[index + BLOCK_LENGTH:index + 2*BLOCK_LENGTH]))
+
+        current_index += 1
     sync_diff = np.diff(sync_indices)
-    print(f'Total Length: {totalLength}, Mean Sync Diff: {np.mean(sync_diff):.2f}, Std Sync Diff: {np.std(sync_diff):.2f}')
+    print(f'Frame Length: {frameLength}, Mean Sync Diff: {np.mean(sync_diff):.2f}, Std Sync Diff: {np.std(sync_diff):.2f}')
     
-    sent_channel_estimate_blocks = encode(get_symbols_from_bitstream(ESTIMATE_CHANNEL_DATA, skip_encoding=True)).reshape(-1, BLOCK_LENGTH)
-    received_channel_estimate_blocks = received_blocks[:ESTIMATE_CHANNEL_BLOCKS, :]
-    filter = estimate_filter(sent_channel_estimate_blocks, received_channel_estimate_blocks, WIENER_SNR)
-    return received_blocks[ESTIMATE_CHANNEL_BLOCKS:, :], filter
+    filter = estimate_filter(known_blocks, received_known_blocks, WIENER_SNR)
+    return received_information_blocks, filter
 
 def estimate_filter(sent_blocks: np.ndarray, receive_blocks: np.ndarray, snr: float) -> np.ndarray:
     """
     Remove the channel effect from the received signal using the sent signal.
     """
-    sent = np.vstack((sent_blocks[:, CYCLIC_PREFIX:], sent_blocks[:, :-CYCLIC_PREFIX]))
-    received = np.vstack((receive_blocks[:, CYCLIC_PREFIX:], receive_blocks[:, :-CYCLIC_PREFIX]))
+    sent = sent_blocks[:, CYCLIC_PREFIX:]
+    received = receive_blocks[:, CYCLIC_PREFIX:]
 
     S = np.fft.fft(sent, axis=1)
     R = np.fft.fft(received, axis=1)
     H = R / (S + 1e-10)
     filter = np.conjugate(H) / (np.abs(H) ** 2 + 1 / snr)
-    filter = np.mean(filter, axis=0)
     return filter
 
 if __name__ == "__main__":
-    AUDIO_PATH = "Downing College.m4a"
+    AUDIO_PATH = "received.wav"
     signal = load_audio_file(AUDIO_PATH)
     signal, filter = synchronize(signal)
+    received_symbols = decode(signal, filter)
 
     sent_symbols = get_symbols_from_bitstream(DATA)
-    received_symbols = decode(signal, filter)
-    received_symbols = received_symbols[:len(sent_symbols)]
-    received_symbols *= np.sqrt(2) / np.mean(np.abs(received_symbols))
-    
 
+    received_symbols = received_symbols[:len(sent_symbols)]
+    if len(sent_symbols) != len(received_symbols): exit('synchronization error')
+    received_symbols *= np.sqrt(2) / np.mean(np.abs(received_symbols))
     plot_sent_received_constellation(sent_symbols, received_symbols)
 
     received_data = get_bitstream_from_symbols(received_symbols)[:len(DATA)]

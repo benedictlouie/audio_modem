@@ -12,13 +12,15 @@ BLOCK_LENGTH = 2 * (SYMBOLS_PER_BLOCK + 1) + CYCLIC_PREFIX
 
 WIENER_SNR = 1
 
+INFORMATION_BLOCKS = 20
+
 CHIRP_TIME = 0.4
 CHIRP_LENGTH = round(CHIRP_TIME * SAMPLE_RATE)
 CHIRP_FACTOR = 0.04
 CHIRP_LOW = 0
 CHIRP_HIGH = 5000
 
-BITS_PER_CONSTELLATION = 2
+BITS_PER_SYMBOL = 2
 
 AUDIO_PATH = "output.wav"
 
@@ -41,7 +43,7 @@ def get_bitstream_from_symbols(symbols: np.ndarray) -> str:
     """
     Convert symbols to a bitstream using the constellation mapping.
     """
-    encoded_bitstream = np.empty(len(symbols) * BITS_PER_CONSTELLATION)
+    encoded_bitstream = np.empty(len(symbols) * BITS_PER_SYMBOL)
     encoded_bitstream[::2] = symbols.real
     encoded_bitstream[1::2] = symbols.imag
     
@@ -85,7 +87,7 @@ def plot_sent_received_constellation(sent: np.ndarray, received: np.ndarray) -> 
     for sym in unique_symbols:
         mask = sent == sym
         plt.scatter(received[mask].real, received[mask].imag,
-                    color=color_map[sym], alpha=0.6, label=f'Received (Sent: {sym})')
+                    color=color_map[sym], alpha=0.1, label=f'Received (Sent: {sym})')
 
     for sym in unique_symbols:
         plt.plot(sym.real, sym.imag, 'x', markersize=12, markeredgewidth=2,
@@ -134,4 +136,4 @@ A luminary in academia's sphere,
 His legacy shines, year after year.
 """
 
-DATA = get_non_repeating_bits(SYMBOLS_PER_BLOCK * BITS_PER_CONSTELLATION * 10 // 648 * 324, 69)
+DATA = get_non_repeating_bits(SYMBOLS_PER_BLOCK * BITS_PER_SYMBOL * INFORMATION_BLOCKS // 648 * 324, 69)

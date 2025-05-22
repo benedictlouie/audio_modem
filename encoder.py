@@ -16,15 +16,15 @@ def insert_known_blocks(signal: np.ndarray) -> np.ndarray:
     """
     Insert a synchronization chirp before each block of the signal.
     """
-    known_blocks = get_known_blocks(len(signal) // BLOCK_LENGTH)
+    known_blocks = get_known_blocks()
     blocks = signal.reshape(-1, BLOCK_LENGTH)
     return np.concatenate((known_blocks, blocks), axis=1).flatten()
 
-def get_known_blocks(blockCount: int) -> np.ndarray:
+def get_known_blocks() -> np.ndarray:
     """
     Generate known blocks of symbols for synchronization.
     """
-    symbols = get_symbols_from_bitstream(get_non_repeating_bits(BITS_PER_CONSTELLATION * SYMBOLS_PER_BLOCK * blockCount, 1), skip_encoding=True)
+    symbols = get_symbols_from_bitstream(get_non_repeating_bits(BITS_PER_SYMBOL * SYMBOLS_PER_BLOCK * INFORMATION_BLOCKS, 1), skip_encoding=True)
     return encode(symbols).reshape(-1, BLOCK_LENGTH)
 
 def insert_chirps(signal: np.ndarray) -> np.ndarray:

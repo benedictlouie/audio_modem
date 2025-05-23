@@ -63,7 +63,7 @@ def estimate_filter(sent_blocks: np.ndarray, received_blocks: np.ndarray, snr: f
     return filter
 
 if __name__ == "__main__":
-    # AUDIO_PATH = "received.wav"
+    AUDIO_PATH = "received.wav"
     signal = load_audio_file(AUDIO_PATH)
     signal, filter = synchronize(signal)
     received_symbols = decode(signal, filter)

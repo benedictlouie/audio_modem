@@ -4,6 +4,7 @@ from typing import Tuple
 
 from utils import *
 from encoder import get_pilot_signal, get_sync_chirp, get_aa_preamble
+from fake_channel import generate_channel
 
 def decode_block(data: np.ndarray, filter: np.ndarray) -> np.ndarray:
     """
@@ -111,14 +112,16 @@ def estimate_filter(sent: np.ndarray, received: np.ndarray, snr: float) -> np.nd
     # plt.show()
     filter = np.conjugate(H) / (np.abs(H) ** 2 + 1 / snr)
     filter = np.mean(filter, axis=0)
-    plt.plot(filter.real)
-    plt.plot(filter.imag)
-    plt.show()
+
+    H_coefficients = np.fft.fft(generate_channel())
+    HG = H_coefficients[1:SYMBOLS_PER_BLOCK+1] * filter[1:SYMBOLS_PER_BLOCK+1]
+    print(abs(HG))
+
     return filter
 
 if __name__ == "__main__":
     RECEIVED_AUDIO = AUDIO_PATH
-    # RECEIVED_AUDIO = "noisy.wav"
+    RECEIVED_AUDIO = "noisy.wav"
     # RECEIVED_AUDIO = "Downing College.m4a"
     
     signal = load_audio_file(RECEIVED_AUDIO)

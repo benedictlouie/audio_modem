@@ -10,7 +10,7 @@ SYMBOLS_PER_BLOCK = 2 ** 12 - 1
 CYCLIC_PREFIX = 2 ** 11
 BLOCK_LENGTH = 2 * (SYMBOLS_PER_BLOCK + 1) + CYCLIC_PREFIX
 
-WIENER_SNR = 1
+WIENER_SNR = 100
 
 INFORMATION_BLOCKS = 20
 
@@ -25,7 +25,7 @@ BITS_PER_SYMBOL = 2
 AUDIO_PATH = "output.wav"
 
 DECTYPE = 'sumprod2'
-CODE = ldpc.code()
+CODE = ldpc.empty()
 
 def load_audio_file(file_path: str) -> np.ndarray:
     with contextlib.redirect_stderr(None):
@@ -136,4 +136,4 @@ A luminary in academia's sphere,
 His legacy shines, year after year.
 """
 
-DATA = get_non_repeating_bits(SYMBOLS_PER_BLOCK * BITS_PER_SYMBOL * INFORMATION_BLOCKS // 648 * 324, 69)
+DATA = get_non_repeating_bits(SYMBOLS_PER_BLOCK * BITS_PER_SYMBOL * INFORMATION_BLOCKS // CODE.N * CODE.K, 69)

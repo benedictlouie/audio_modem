@@ -500,3 +500,21 @@ class code:
         L_p = L.ctypes.data_as(ct.POINTER(ct.c_double))
         c_ldpc.Lxfb.restype = ct.c_double
         return c_ldpc.Lxfb(L_p, dc, corrflag), L
+
+
+class empty:
+    """ Empty class to be used as a placeholder for the LDPC class
+    """
+    def __init__(self):
+        self.N = 1
+        self.K = 1
+    
+    def encode(self, info):
+        """ Returns the information word unchanged, as no encoding is done
+        """
+        return info
+    
+    def decode(self, ch, dectype='sumprod2', corr_factor=0.7):
+        """ Returns the channel input unchanged, as no decoding is done
+        """
+        return ch, 0

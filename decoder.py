@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from typing import Tuple
 
 from utils import *
-from encoder import encode, get_known_blocks, get_chirp
+from encoder import get_known_blocks, get_chirp
 
 def decode(signal: np.ndarray, filter: np.ndarray) -> np.ndarray:
     """
@@ -43,15 +43,18 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     sync_diff = np.diff(sync_indices)
     print(f'Frame Length: {frameLength}, Mean Sync Diff: {np.mean(sync_diff):.2f}, Std Sync Diff: {np.std(sync_diff):.2f}')
     
+    # snr = np.mean(signal[startIndex + CHIRP_LENGTH:endIndex] ** 2) / (np.mean(signal[:startIndex]) ** 2)
+    # print(f'SNR: {snr:.2f}')
+
     filter = estimate_filter(known_blocks, received_known_blocks, WIENER_SNR)
     return received_information_blocks, filter
 
-def estimate_filter(sent_blocks: np.ndarray, receive_blocks: np.ndarray, snr: float) -> np.ndarray:
+def estimate_filter(sent_blocks: np.ndarray, received_blocks: np.ndarray, snr: float) -> np.ndarray:
     """
-    Remove the channel effect from the received signal using the sent signal.
+    Estimate filter from a known sent and received block.
     """
     sent = sent_blocks[:, CYCLIC_PREFIX:]
-    received = receive_blocks[:, CYCLIC_PREFIX:]
+    received = received_blocks[:, CYCLIC_PREFIX:]
 
     S = np.fft.fft(sent, axis=1)
     R = np.fft.fft(received, axis=1)
@@ -60,7 +63,7 @@ def estimate_filter(sent_blocks: np.ndarray, receive_blocks: np.ndarray, snr: fl
     return filter
 
 if __name__ == "__main__":
-    AUDIO_PATH = "received.wav"
+    # AUDIO_PATH = "received.wav"
     signal = load_audio_file(AUDIO_PATH)
     signal, filter = synchronize(signal)
     received_symbols = decode(signal, filter)

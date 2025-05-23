@@ -7,7 +7,16 @@ def encode(symbols: np.ndarray) -> np.ndarray:
     Encode a bitstream into a time-domain signal using IFFT and add a cyclic prefix.
     """
     symbols = np.concatenate((symbols, np.repeat(1 + 1j, (-len(symbols)) % SYMBOLS_PER_BLOCK))).reshape(-1, SYMBOLS_PER_BLOCK)
-    encoded_symbols = np.concatenate((np.zeros((symbols.shape[0], 1)), symbols, np.zeros((symbols.shape[0], 1)), np.conjugate(symbols[:, ::-1])), axis=1)
+    symbols = np.concatenate((np.zeros((symbols.shape[0], HIGH_PASS_INDEX)),
+                              symbols,
+                              np.zeros((symbols.shape[0], EFFECTIVE_SYMBOLS_PER_BLOCK - LOW_PASS_INDEX)),
+                              ), axis=1)
+    encoded_symbols = np.concatenate((
+        np.zeros((symbols.shape[0], 1)),
+        symbols,
+        np.zeros((symbols.shape[0], 1)),
+        np.conjugate(symbols[:, ::-1]
+        )), axis=1)
     symbolsInTime = np.fft.ifft(encoded_symbols, axis=1).real
     signal = np.concatenate((symbolsInTime[:, -CYCLIC_PREFIX:], symbolsInTime), axis=1).flatten()
     return signal / np.max(np.abs(signal))

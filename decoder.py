@@ -10,7 +10,7 @@ def decode(signal: np.ndarray, filter: np.ndarray) -> np.ndarray:
     Decode the received signal into symbols.
     """
     fourier = np.fft.fft(signal[:, CYCLIC_PREFIX:], axis=1) * filter
-    symbols = fourier[:, 1:SYMBOLS_PER_BLOCK + 1].flatten()
+    symbols = fourier[:, 1 + HIGH_PASS_INDEX: 1 + HIGH_PASS_INDEX + SYMBOLS_PER_BLOCK].flatten()
     return symbols
 
 def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -75,5 +75,7 @@ if __name__ == "__main__":
     received_symbols *= np.sqrt(2) / np.mean(np.abs(received_symbols))
     plot_sent_received_constellation(sent_symbols, received_symbols)
 
+    plot_error_per_bin(received_symbols, sent_symbols, filter)
+
     received_data = get_bitstream_from_symbols(received_symbols)[:len(DATA)]
-    print(f'Error Rate: {np.sum(received_data != DATA) / len(DATA) * 100:.2f}%')
+    print(f'Bit Error Rate: {np.sum(received_data != DATA) / len(DATA) * 100:.2f}%')

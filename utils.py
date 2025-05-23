@@ -6,17 +6,22 @@ import numpy as np
 from scipy.io.wavfile import write
 
 SAMPLE_RATE = 48000
-SYMBOLS_PER_BLOCK = 2 ** 12 - 1
+
+EFFECTIVE_SYMBOLS_PER_BLOCK = 2 ** 12 - 1
 CYCLIC_PREFIX = 2 ** 11
-BLOCK_LENGTH = 2 * (SYMBOLS_PER_BLOCK + 1) + CYCLIC_PREFIX
+BLOCK_LENGTH = 2 * (EFFECTIVE_SYMBOLS_PER_BLOCK + 1) + CYCLIC_PREFIX
+
+LOW_PASS_INDEX = round(0.95 * EFFECTIVE_SYMBOLS_PER_BLOCK)
+HIGH_PASS_INDEX = round(0.005 * EFFECTIVE_SYMBOLS_PER_BLOCK)
+SYMBOLS_PER_BLOCK = LOW_PASS_INDEX - HIGH_PASS_INDEX
 
 WIENER_SNR = 100
 
 INFORMATION_BLOCKS = 20
 
-CHIRP_TIME = 0.4
+CHIRP_TIME = 0.5
 CHIRP_LENGTH = round(CHIRP_TIME * SAMPLE_RATE)
-CHIRP_FACTOR = 0.04
+CHIRP_FACTOR = 0.1
 CHIRP_LOW = 0
 CHIRP_HIGH = 5000
 
@@ -103,6 +108,34 @@ def plot_sent_received_constellation(sent: np.ndarray, received: np.ndarray) -> 
     plt.title(f'Constellation: Sent vs Received. Accuracy: {accuracy:.4f}.')
     plt.axis('equal')
     plt.show()
+
+def plot_error_per_bin(received: np.ndarray, sent: np.ndarray, filter: np.ndarray) -> None:
+    received = np.reshape(received, (-1, SYMBOLS_PER_BLOCK))
+    sent = np.reshape(sent, (-1, SYMBOLS_PER_BLOCK))
+
+    received = np.sign(received.real) + 1j * np.sign(received.imag)
+    error_rate = np.mean(received != sent, axis=0)
+    filter_magnitude = np.abs(np.mean(filter, axis=0))[1: SYMBOLS_PER_BLOCK + 1]
+
+    fig, ax1 = plt.subplots(figsize=(12, 6))
+
+    color = 'tab:blue'
+    ax1.bar(np.arange(SYMBOLS_PER_BLOCK), error_rate, color=color, alpha=0.6, label='Error Rate')
+    ax1.set_xlabel('Bin Index')
+    ax1.set_ylabel('Error Rate', color=color)
+    ax1.tick_params(axis='y', labelcolor=color)
+    ax1.grid(True, linestyle='--', alpha=0.6)
+
+    ax2 = ax1.twinx()
+    color = 'tab:orange'
+    ax2.plot(np.arange(SYMBOLS_PER_BLOCK), filter_magnitude, color=color, label='Filter Magnitude')
+    ax2.set_ylabel('Filter Magnitude', color=color)
+    ax2.tick_params(axis='y', labelcolor=color)
+
+    plt.title('Error Rate per Bin and Filter Magnitude')
+    fig.tight_layout()
+    plt.show()
+
 
 def text_to_binary(text: str) -> str:
     return ''.join(format(ord(c), '08b') for c in text)

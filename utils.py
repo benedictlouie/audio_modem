@@ -51,8 +51,9 @@ def get_bitstream_from_symbols(symbols: np.ndarray) -> str:
     encoded_bitstream = np.empty(len(symbols) * BITS_PER_SYMBOL)
     encoded_bitstream[::2] = symbols.real
     encoded_bitstream[1::2] = symbols.imag
-    
     encoded_bitstream = encoded_bitstream[:(len(encoded_bitstream) // CODE.N) * CODE.N]
+    encoded_bitstream = unpermute(encoded_bitstream)
+
     bitstream = np.array([])
     for i in range(0, len(encoded_bitstream), CODE.N):
         bitstream = np.concatenate((bitstream, CODE.decode(encoded_bitstream[i:i + CODE.N], DECTYPE)[0][:CODE.K]))
@@ -72,6 +73,7 @@ def get_symbols_from_bitstream(bitstream: str, skip_encoding: bool = False) -> n
         encoded_bitstream = np.array([])
         for i in range(0, len(bitstream), CODE.K):
             encoded_bitstream = np.concatenate((encoded_bitstream, CODE.encode(bitstream[i:i + CODE.K])))
+        encoded_bitstream[:] = permute(encoded_bitstream)
 
     encoded_bitstream = np.where(encoded_bitstream == 0, 1, -1)
     symbols = encoded_bitstream[::2] + 1j * encoded_bitstream[1::2]
@@ -82,6 +84,9 @@ def plot_sent_received_constellation(sent: np.ndarray, received: np.ndarray) -> 
     Plot the constellation of sent and received symbols.
     Sent symbols are used to color received ones, and ideal sent locations are also shown.
     """
+
+    # received = np.reshape(received, (-1, SYMBOLS_PER_BLOCK))[:,SYMBOLS_PER_BLOCK*9//10:SYMBOLS_PER_BLOCK].flatten()
+    # sent = np.reshape(sent, (-1, SYMBOLS_PER_BLOCK))[:,SYMBOLS_PER_BLOCK*9//10:SYMBOLS_PER_BLOCK].flatten()
 
     unique_symbols = np.unique(sent)
     colors = ['red', 'blue', 'green', 'orange']
@@ -136,6 +141,14 @@ def plot_error_per_bin(received: np.ndarray, sent: np.ndarray, filter: np.ndarra
     fig.tight_layout()
     plt.show()
 
+def permute(arr: np.ndarray):
+    perm = np.random.default_rng(seed=42).permutation(len(arr))
+    return arr[perm]
+
+def unpermute(shuffled: np.ndarray):
+    perm = np.random.default_rng(seed=42).permutation(len(shuffled))
+    rev_perm = np.argsort(perm)
+    return shuffled[rev_perm]
 
 def text_to_binary(text: str) -> str:
     return ''.join(format(ord(c), '08b') for c in text)

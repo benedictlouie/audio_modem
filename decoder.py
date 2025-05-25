@@ -62,6 +62,11 @@ def estimate_filter(sent_blocks: np.ndarray, received_blocks: np.ndarray, snr: f
     filter = np.conjugate(H) / (np.abs(H) ** 2 + 1 / snr)
     return filter
 
+def unrotate_constellation(received: np.ndarray, angle: float) -> np.ndarray:
+    received = np.reshape(received, (-1, SYMBOLS_PER_BLOCK))
+    unrotations = np.exp(-1j * angle * np.arange(SYMBOLS_PER_BLOCK) / SYMBOLS_PER_BLOCK)
+    return (received * unrotations).flatten()
+
 if __name__ == "__main__":
     AUDIO_PATH = "received.wav"
     signal = load_audio_file(AUDIO_PATH)
@@ -73,9 +78,13 @@ if __name__ == "__main__":
     received_symbols = received_symbols[:len(sent_symbols)]
     if len(sent_symbols) != len(received_symbols): exit('synchronization error')
     received_symbols *= np.sqrt(2) / np.mean(np.abs(received_symbols))
+
+    # received_symbols = unrotate_constellation(received_symbols, 9 * np.pi /180)
+
     plot_sent_received_constellation(sent_symbols, received_symbols)
 
     plot_error_per_bin(received_symbols, sent_symbols, filter)
 
     received_data = get_bitstream_from_symbols(received_symbols)[:len(DATA)]
+
     print(f'Bit Error Rate: {np.sum(received_data != DATA) / len(DATA) * 100:.2f}%')

@@ -52,7 +52,7 @@ def get_bitstream_from_symbols(symbols: np.ndarray) -> str:
     encoded_bitstream[::2] = symbols.real
     encoded_bitstream[1::2] = symbols.imag
     encoded_bitstream = encoded_bitstream[:(len(encoded_bitstream) // CODE.N) * CODE.N]
-    encoded_bitstream = unpermute(encoded_bitstream)
+    # encoded_bitstream = unpermute(encoded_bitstream)
 
     bitstream = np.array([])
     for i in range(0, len(encoded_bitstream), CODE.N):
@@ -73,7 +73,7 @@ def get_symbols_from_bitstream(bitstream: str, skip_encoding: bool = False) -> n
         encoded_bitstream = np.array([])
         for i in range(0, len(bitstream), CODE.K):
             encoded_bitstream = np.concatenate((encoded_bitstream, CODE.encode(bitstream[i:i + CODE.K])))
-        encoded_bitstream[:] = permute(encoded_bitstream)
+        # encoded_bitstream[:] = permute(encoded_bitstream)
 
     encoded_bitstream = np.where(encoded_bitstream == 0, 1, -1)
     symbols = encoded_bitstream[::2] + 1j * encoded_bitstream[1::2]

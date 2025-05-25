@@ -83,7 +83,7 @@ if __name__ == "__main__":
 
     plot_sent_received_constellation(sent_symbols, received_symbols)
 
-    plot_error_per_bin(received_symbols, sent_symbols, filter)
+    # plot_error_per_bin(received_symbols, sent_symbols, filter)
 
     received_data = get_bitstream_from_symbols(received_symbols)[:len(DATA)]
 

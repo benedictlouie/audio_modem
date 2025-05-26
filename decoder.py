@@ -9,7 +9,7 @@ def decode(signal: np.ndarray, filter: np.ndarray) -> np.ndarray:
     """
     Decode the received signal into symbols.
     """
-    fourier = np.fft.fft(signal[:, CYCLIC_PREFIX:], axis=1) * filter
+    fourier = np.fft.fft(signal, axis=1) * filter
     symbols = fourier[:, 1 + HIGH_PASS_INDEX: 1 + HIGH_PASS_INDEX + SYMBOLS_PER_BLOCK].flatten()
     return symbols
 
@@ -26,60 +26,64 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     frameLength = 2 * BLOCK_LENGTH
     left_bound = startIndex + CHIRP_LENGTH - frameLength//2
 
-    received_known_blocks = np.empty((0, BLOCK_LENGTH))
-    received_information_blocks = np.empty((0, BLOCK_LENGTH))
-
-    sync_indices = []
+    sync_indices = np.array([])
     current_index = 0
     while left_bound + frameLength < endIndex:
         index = int(np.argmax(np.correlate(signal[left_bound:left_bound + frameLength], known_blocks[current_index]))) + left_bound
-        sync_indices.append(index)
+        sync_indices = np.append(sync_indices, index)
         left_bound = index + frameLength // 2
-        
-        received_known_blocks = np.vstack((received_known_blocks, signal[index:index + BLOCK_LENGTH]))
-        received_information_blocks = np.vstack((received_information_blocks, signal[index + BLOCK_LENGTH:index + 2*BLOCK_LENGTH]))
 
         current_index += 1
-    sync_diff = np.diff(sync_indices)
-    print(f'Frame Length: {frameLength}, Mean Sync Diff: {np.mean(sync_diff):.2f}, Std Sync Diff: {np.std(sync_diff):.2f}')
-    
-    # snr = np.mean(signal[startIndex + CHIRP_LENGTH:endIndex] ** 2) / (np.mean(signal[:startIndex]) ** 2)
-    # print(f'SNR: {snr:.2f}')
 
-    filter = estimate_filter(known_blocks, received_known_blocks, WIENER_SNR)
+    
+    indices = np.arange(current_index) * frameLength + startIndex + CHIRP_LENGTH
+    drift_gradient = np.dot(indices - np.mean(indices), sync_indices - np.mean(sync_indices)) / np.sum((indices - np.mean(indices)) ** 2)
+    drift_constant = np.mean(sync_indices) - drift_gradient * np.mean(indices)
+
+    frame_indices = (np.arange(startIndex + CHIRP_LENGTH, startIndex + CHIRP_LENGTH + current_index * frameLength) * drift_gradient + drift_constant).reshape(-1, frameLength)
+    extracted_indices = np.vstack([np.arange(round(row[0]), round(row[0]) + frameLength) for row in frame_indices])
+    drift = extracted_indices - frame_indices
+    received_blocks = signal[extracted_indices]
+
+    sent_known_blocks = known_blocks[:, CYCLIC_PREFIX:BLOCK_LENGTH]
+    known_block_drift = drift[:, CYCLIC_PREFIX:BLOCK_LENGTH]
+    received_known_blocks = received_blocks[:, CYCLIC_PREFIX:BLOCK_LENGTH]
+    received_information_blocks = received_blocks[:, BLOCK_LENGTH + CYCLIC_PREFIX:]
+    information_block_drift = drift[:, BLOCK_LENGTH + CYCLIC_PREFIX:]
+
+    filter = estimate_filter(sent_known_blocks, received_known_blocks, known_block_drift, information_block_drift, WIENER_SNR)
     return received_information_blocks, filter
 
-def estimate_filter(sent_blocks: np.ndarray, received_blocks: np.ndarray, snr: float) -> np.ndarray:
+def estimate_filter(sent_known_blocks: np.ndarray,
+                    received_known_blocks: np.ndarray,
+                    known_block_drift: np.ndarray,
+                    information_block_drift: np.ndarray, 
+                    snr: float
+                    ) -> np.ndarray:
     """
     Estimate filter from a known sent and received block.
     """
-    sent = sent_blocks[:, CYCLIC_PREFIX:]
-    received = received_blocks[:, CYCLIC_PREFIX:]
+    bins = BLOCK_LENGTH - CYCLIC_PREFIX
 
-    S = np.fft.fft(sent, axis=1)
-    R = np.fft.fft(received, axis=1)
-    H = R / (S + 1e-10)
-    filter = np.conjugate(H) / (np.abs(H) ** 2 + 1 / snr)
+    sent_fourier = np.fft.fft(sent_known_blocks, axis=1)
+    received_fourier = np.fft.fft(received_known_blocks, axis=1)
+    received_fourier *= np.exp(-2j * np.pi * np.arange(bins) * known_block_drift / bins)
+    zero_forcing_filter = received_fourier / (sent_fourier + 1e-10)
+    filter = np.conjugate(zero_forcing_filter) / (np.abs(zero_forcing_filter) ** 2 + 1 / snr)
+    filter = np.mean(filter, axis=0) * np.exp(-2j * np.pi * np.arange(bins) * information_block_drift / bins)
     return filter
-
-def unrotate_constellation(received: np.ndarray, angle: float) -> np.ndarray:
-    received = np.reshape(received, (-1, SYMBOLS_PER_BLOCK))
-    unrotations = np.exp(-1j * angle * np.arange(SYMBOLS_PER_BLOCK) / SYMBOLS_PER_BLOCK)
-    return (received * unrotations).flatten()
 
 if __name__ == "__main__":
     AUDIO_PATH = "received.wav"
     signal = load_audio_file(AUDIO_PATH)
-    signal, filter = synchronize(signal)
-    received_symbols = decode(signal, filter)
+    received_information_blocks, filter = synchronize(signal)
+    received_symbols = decode(received_information_blocks, filter)
 
     sent_symbols = get_symbols_from_bitstream(DATA)
 
     received_symbols = received_symbols[:len(sent_symbols)]
     if len(sent_symbols) != len(received_symbols): exit('synchronization error')
     received_symbols *= np.sqrt(2) / np.mean(np.abs(received_symbols))
-
-    # received_symbols = unrotate_constellation(received_symbols, 9 * np.pi /180)
 
     plot_sent_received_constellation(sent_symbols, received_symbols)
 

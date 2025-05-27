@@ -1,94 +1,155 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from typing import Tuple
-
 from utils import *
-from encoder import get_known_blocks, get_chirp
 
-def decode(signal: np.ndarray, filter: np.ndarray) -> np.ndarray:
-    """
-    Decode the received signal into symbols.
-    """
-    fourier = np.fft.fft(signal, axis=1) * filter
-    symbols = fourier[:, 1 + HIGH_PASS_INDEX: 1 + HIGH_PASS_INDEX + SYMBOLS_PER_BLOCK].flatten()
+def getStartEndIndex(received_signal):
+    start_chirp = generate_chirp(CHIRP_LENGTH, SAMPLING_RATE, CHIRP_LOW, CHIRP_HIGH)
+    end_chirp = generate_chirp(CHIRP_LENGTH, SAMPLING_RATE, CHIRP_HIGH, CHIRP_LOW)
+    corr_start = correlate(received_signal, start_chirp, mode='valid')
+    start_index = np.argmax(np.abs(corr_start))
+    corr_end = correlate(received_signal, end_chirp, mode='valid')
+    end_index = np.argmax(np.abs(corr_end))
+    return start_index, end_index
+
+def resampleUsingStartAndEnd(signal):
+    start_index, end_index = getStartEndIndex(signal)
+    extracted_ofdm = signal[start_index:end_index]
+
+    NUMBER_OF_BLOCKS_WITH_CODING = round((len(extracted_ofdm) - CHIRP_LENGTH) / BLOCK_LENGTH) - NUMBER_OF_PILOT_BLOCKS
+    expected_length = CHIRP_LENGTH + BLOCK_LENGTH * (NUMBER_OF_PILOT_BLOCKS + NUMBER_OF_BLOCKS_WITH_CODING)
+
+    sampling_ratio = expected_length / len(extracted_ofdm)
+    extracted_resampled = librosa.resample(extracted_ofdm, orig_sr=SAMPLING_RATE, target_sr=SAMPLING_RATE * sampling_ratio)
+    extracted_resampled = extracted_resampled[CHIRP_LENGTH: CHIRP_LENGTH+expected_length]
+    return extracted_resampled
+
+def signalToSymbols(signal):
+    symbols = []
+    for block in signal:
+        block_no_cp = block[CYCLIC_PREFIX:]           # Remove CP → now length = N_DFT
+        block_fft = np.fft.fft(block_no_cp)           # FFT → returns N_DFT complex values
+        symbols.append(block_fft)
+    symbols = np.array(symbols)
     return symbols
 
-def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Synchronize the received signal and return the filter.
-    """
-    chirp_signal = get_chirp()
-    startIndex = np.argmax(np.correlate(signal, chirp_signal[::-1]))
-    endIndex = np.argmax(np.correlate(signal, chirp_signal))
+def estimate_channel_coefficients_from_pilot_symbols(received_pilot_symbols):
+    pilot_bits = generate_pilot_bits()
+    pilot_symbols = modulate(pilot_bits)
+    pilot_symbols = pilot_symbols.reshape(received_pilot_symbols.shape)
+    estimated_channel_coefficients = received_pilot_symbols / pilot_symbols
+    estimated_channel_coefficients = np.mean(estimated_channel_coefficients, axis=0)
+    return estimated_channel_coefficients    
+
+def get_filter(channel_coefficients, shape, SNR=SNR):
+    filter = np.conjugate(channel_coefficients)/(np.abs(channel_coefficients)**2 + 1/SNR)
+    big_filter = np.empty(shape, dtype=complex)
+    for i in range(len(big_filter)):
+        big_filter[i,:] = filter
+    return big_filter
+
+def recoverSymbolsFromAudio(audio):
+    received_signal, sr = librosa.load(audio, sr=SAMPLING_RATE, mono=True)
+    resampled_signal = resampleUsingStartAndEnd(received_signal)
+
+    ofdm_blocks_time = resampled_signal.reshape((-1, BLOCK_LENGTH))
+    ofdm_blocks_freq = signalToSymbols(ofdm_blocks_time)
+
+    demodulated_pilot_symbols = ofdm_blocks_freq[:NUMBER_OF_PILOT_BLOCKS, HIGH_PASS_INDEX: LOW_PASS_INDEX]
+    demodulated_symbols = ofdm_blocks_freq[NUMBER_OF_PILOT_BLOCKS:, HIGH_PASS_INDEX: LOW_PASS_INDEX]
+    estimated_channel_coefficients = estimate_channel_coefficients_from_pilot_symbols(demodulated_pilot_symbols)
+    filter = get_filter(estimated_channel_coefficients, demodulated_symbols.shape)
     
-    known_blocks = get_known_blocks()
+    recovered_symbols = demodulated_symbols * filter
+    return recovered_symbols
 
-    frameLength = 2 * BLOCK_LENGTH
-    left_bound = startIndex + CHIRP_LENGTH - frameLength//2
+constellation_points = list(MAPPING.values())
 
-    sync_indices = np.array([])
-    current_index = 0
-    while left_bound + frameLength < endIndex:
-        index = int(np.argmax(np.correlate(signal[left_bound:left_bound + frameLength], known_blocks[current_index]))) + left_bound
-        sync_indices = np.append(sync_indices, index)
-        left_bound = index + frameLength // 2
+def find_closest_constellation(symbol, constellation):
+    distances = [np.abs(symbol - c) for c in constellation]
+    return np.argmin(distances)
 
-        current_index += 1
+def plotConstellationDiagram(sent_symbols, recovered_symbols):
 
+    colors = ['red', 'blue', 'green', 'purple']
+
+    tx = sent_symbols.flatten()
+    rx = recovered_symbols.flatten()
+    rx = rx / np.sqrt(np.mean(np.abs(rx)**2))
+
+    # Get color labels based on transmitted symbols' closest constellation points
+    color_labels = np.array([find_closest_constellation(sym, constellation_points) for sym in tx])
+
+    # Plot received points colored by intended QPSK cluster
+    plt.figure(figsize=(8, 8))
+    for i in range(4):
+        plt.scatter(rx.real[color_labels == i], rx.imag[color_labels == i], color=colors[i], label=f'Cluster {i}', alpha=0.1)
+
+    # Plot ideal constellation points in matching color
+    for i, point in enumerate(constellation_points):
+        plt.plot(point.real, point.imag, 'x', color=colors[i], markersize=12, mew=2, label=f'QPSK {i}')
+
+    # Formatting
+    plt.axhline(0, color='gray', lw=0.5)
+    plt.axvline(0, color='gray', lw=0.5)
+    plt.grid(True, linestyle='--', alpha=0.3)
+    plt.axis('equal')
+
+    decoded_symbols = np.array([find_closest_constellation(sym, constellation_points) for sym in rx])
+    original_symbols = np.array([find_closest_constellation(sym, constellation_points) for sym in tx])
+    correctness = np.sum(decoded_symbols == original_symbols) / len(original_symbols)
+    plt.title(f"Constellation Diagram (Correctness = {correctness})")
+    plt.show()
+
+def QPSKBitErrorRatePreLDPC(recovered_symbols, encoded_bitstream):
     
-    indices = np.arange(current_index) * frameLength + startIndex + CHIRP_LENGTH
-    drift_gradient = np.dot(indices - np.mean(indices), sync_indices - np.mean(sync_indices)) / np.sum((indices - np.mean(indices)) ** 2)
-    drift_constant = np.mean(sync_indices) - drift_gradient * np.mean(indices)
+    assert BITS_PER_SYMBOL == 2
+    rx = recovered_symbols.flatten()
+    rx = rx / np.sqrt(np.mean(np.abs(rx)**2))
 
-    frame_indices = (np.arange(startIndex + CHIRP_LENGTH, startIndex + CHIRP_LENGTH + current_index * frameLength) * drift_gradient + drift_constant).reshape(-1, frameLength)
-    extracted_indices = np.vstack([np.arange(round(row[0]), round(row[0]) + frameLength) for row in frame_indices])
-    drift = extracted_indices - frame_indices
-    received_blocks = signal[extracted_indices]
+    decoded_symbols = np.array([find_closest_constellation(sym, constellation_points) for sym in rx])
 
-    sent_known_blocks = known_blocks[:, CYCLIC_PREFIX:BLOCK_LENGTH]
-    known_block_drift = drift[:, CYCLIC_PREFIX:BLOCK_LENGTH]
-    received_known_blocks = received_blocks[:, CYCLIC_PREFIX:BLOCK_LENGTH]
-    received_information_blocks = received_blocks[:, BLOCK_LENGTH + CYCLIC_PREFIX:]
-    information_block_drift = drift[:, BLOCK_LENGTH + CYCLIC_PREFIX:]
+    decoded_bits = ""
+    for sym in decoded_symbols:
+        if sym == 0: decoded_bits += "00"
+        elif sym == 1: decoded_bits += "01"
+        elif sym == 2: decoded_bits += "10"
+        elif sym == 3: decoded_bits += "11"
+        else: exit("symbol error")
+    decoded_bits = np.array([int(bit) for bit in decoded_bits])
+    decoded_bits = decoded_bits[:len(encoded_bitstream)]
+    return np.sum(decoded_bits != encoded_bitstream) / len(encoded_bitstream)
 
-    filter = estimate_filter(sent_known_blocks, received_known_blocks, known_block_drift, information_block_drift, WIENER_SNR)
-    return received_information_blocks, filter
+def decodeLDPCFromQPSK(recovered_symbols):
 
-def estimate_filter(sent_known_blocks: np.ndarray,
-                    received_known_blocks: np.ndarray,
-                    known_block_drift: np.ndarray,
-                    information_block_drift: np.ndarray, 
-                    snr: float
-                    ) -> np.ndarray:
-    """
-    Estimate filter from a known sent and received block.
-    """
-    bins = BLOCK_LENGTH - CYCLIC_PREFIX
+    assert BITS_PER_SYMBOL == 2
+    rx = recovered_symbols.flatten()
+    rx = rx / np.sqrt(np.mean(np.abs(rx)**2))
 
-    sent_fourier = np.fft.fft(sent_known_blocks, axis=1)
-    received_fourier = np.fft.fft(received_known_blocks, axis=1)
-    received_fourier *= np.exp(-2j * np.pi * np.arange(bins) * known_block_drift / bins)
-    zero_forcing_filter = received_fourier / (sent_fourier + 1e-10)
-    filter = np.conjugate(zero_forcing_filter) / (np.abs(zero_forcing_filter) ** 2 + 1 / snr)
-    filter = np.mean(filter, axis=0) * np.exp(-2j * np.pi * np.arange(bins) * information_block_drift / bins)
-    return filter
+    LLR = np.array([[sym.real, sym.imag] for sym in rx]).flatten()
+    LLR = LLR[: len(LLR) // CODE.N * CODE.N]
+    bitstream = np.array([])
+    for i in range(0, len(LLR), CODE.N):
+        bitstream = np.concatenate((bitstream, CODE.decode(LLR[i:i + CODE.N], DECTYPE)[0][:CODE.K]))
+    bitstream = np.where(bitstream > 0, 0, 1)
+    bitstream = bitstream[:len(bits)]
+    return bitstream
 
+def QPSKBitErrorRateAfterLDPC(recovered_bits, original_bits):
+    return np.sum(recovered_bits != original_bits) / len(original_bits)
+    
 if __name__ == "__main__":
-    AUDIO_PATH = "received.wav"
-    signal = load_audio_file(AUDIO_PATH)
-    received_information_blocks, filter = synchronize(signal)
-    received_symbols = decode(received_information_blocks, filter)
+    received_audio = DEFAULT_AUDIO_PATH
+    received_audio = "Untitled.aifc" # your file
 
-    sent_symbols = get_symbols_from_bitstream(DATA)
+    recovered_symbols = recoverSymbolsFromAudio(received_audio)
+    sent_symbols = bitsToSymbols(bits)
 
-    received_symbols = received_symbols[:len(sent_symbols)]
-    if len(sent_symbols) != len(received_symbols): exit('synchronization error')
-    received_symbols *= np.sqrt(2) / np.mean(np.abs(received_symbols))
+    plotConstellationDiagram(sent_symbols, recovered_symbols)
+    errorPreLDPC = QPSKBitErrorRatePreLDPC(recovered_symbols, encodeLDPC(bits))
+    print("Bit error rate pre-LDPC:", errorPreLDPC)
 
-    plot_sent_received_constellation(sent_symbols, received_symbols)
+    recovered_bits = decodeLDPCFromQPSK(recovered_symbols)
+    errorPostLDPC = QPSKBitErrorRateAfterLDPC(recovered_bits, bits)
+    print("Bit error rate after LDPC:", errorPostLDPC)
 
-    # plot_error_per_bin(received_symbols, sent_symbols, filter)
-
-    received_data = get_bitstream_from_symbols(received_symbols)[:len(DATA)]
-
-    print(f'Bit Error Rate: {np.sum(received_data != DATA) / len(DATA) * 100:.2f}%')
+    

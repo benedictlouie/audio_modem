@@ -4,6 +4,7 @@ import ldpc
 import librosa
 from scipy.io.wavfile import write
 from scipy.signal import correlate
+import os
 
 # All constants
 
@@ -39,7 +40,7 @@ INV_MAPPING = {v: k for k, v in MAPPING.items()}
 BITS_PER_SYMBOL = 2
 
 # WIENER FILTER
-SNR = 10
+SNR = float('-inf')
 
 # LDPC SETTINGS
 DECTYPE = 'sumprod2'
@@ -55,7 +56,7 @@ def generate_pilot_bits():
     return pilot_bits
 
 def encodeLDPC(bits):
-    bits = np.concatenate((bits, np.zeros((-len(bits)) % CODE.K)))
+    bits = np.concatenate((bits, np.random.randint(2, size=(-len(bits)) % CODE.K)))
     encoded_bitstream = np.array([])
     for i in range(0, len(bits), CODE.K):
         encoded_bitstream = np.concatenate((encoded_bitstream, CODE.encode(bits[i:i + CODE.K])))
@@ -78,4 +79,4 @@ def generate_chirp(length, fs, f0, f1):
     k = (f1 - f0) / (length / fs)
     return CHIRP_FACTOR * np.sin(2 * np.pi * (f0 * t + 0.5 * k * t**2))
 
-bits = generate_data_bits(20)
+bits = generate_data_bits(40)

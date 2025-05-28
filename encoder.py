@@ -21,6 +21,7 @@ def generateAudioFromBits(bits, path):
 
     symbols = bitsToSymbols(bits)
     ofdm_blocks = symbolsToSignal(symbols)
+    print("Actual length:", CHIRP_LENGTH + BLOCK_LENGTH * (NUMBER_OF_PILOT_BLOCKS + len(ofdm_blocks)))
 
     pilot_bits = generate_pilot_bits()
     pilot_symbols = modulate(pilot_bits)
@@ -41,6 +42,7 @@ def generateAudioFromBits(bits, path):
     ])
     signal_normalized = signal / np.max(np.abs(signal))
     write(path, SAMPLING_RATE, signal_normalized.astype(np.float32))
+    print("Bitrate:", len(bits) / len(signal) * SAMPLING_RATE, "bits/s")
 
 if __name__ == "__main__":
     generateAudioFromBits(bits, DEFAULT_AUDIO_PATH)

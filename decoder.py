@@ -17,6 +17,7 @@ def resampleUsingStartAndEnd(signal):
 
     NUMBER_OF_BLOCKS_WITH_CODING = round((len(extracted_ofdm) - CHIRP_LENGTH) / BLOCK_LENGTH) - NUMBER_OF_PILOT_BLOCKS
     expected_length = CHIRP_LENGTH + BLOCK_LENGTH * (NUMBER_OF_PILOT_BLOCKS + NUMBER_OF_BLOCKS_WITH_CODING)
+    print("Expected length:", expected_length)
 
     sampling_ratio = expected_length / len(extracted_ofdm)
     extracted_resampled = librosa.resample(extracted_ofdm, orig_sr=SAMPLING_RATE, target_sr=SAMPLING_RATE * sampling_ratio)
@@ -43,7 +44,8 @@ def estimate_noise_variance(received_pilot_symbols):
     pilot_symbols = modulate(generate_pilot_bits())
     pilot_symbols = pilot_symbols.reshape(received_pilot_symbols.shape)
     estimated_channel_coefficients = received_pilot_symbols / pilot_symbols
-    noise_variance = np.abs(np.mean(estimated_channel_coefficients, axis=0)) ** (-2)
+    sigma2 = np.mean(np.var(np.abs(estimated_channel_coefficients), axis=0))
+    noise_variance = sigma2 * np.abs(np.mean(estimated_channel_coefficients, axis=0)) ** (-2)
     return noise_variance
 
 def get_filter(channel_coefficients, shape, snr=SNR):

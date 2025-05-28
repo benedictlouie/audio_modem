@@ -27,7 +27,7 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     
     known_blocks = get_known_blocks()
 
-    # TODO: make frame length variable 
+    # TODO: Variable frame length
     frameLength = 2 * BLOCK_LENGTH
     
     # left_bound is the end of the chirp minus one block length
@@ -60,10 +60,11 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     extracted_indices = np.vstack([np.arange(round(row[0]), round(row[0]) + frameLength) for row in frame_indices])
     drift = extracted_indices - frame_indices
 
-    # extract relevant blocks we want
+    # Extract relevant blocks we want
     received_blocks = signal[extracted_indices]
 
-    # get the known blocks and informations blocks and their drift
+    # Get the known blocks and informations blocks and their drift. All have N_DFT columns right now.
+    # TODO: Variable frame length
     sent_known_blocks = known_blocks[:, CYCLIC_PREFIX:BLOCK_LENGTH]
     known_block_drift = drift[:, CYCLIC_PREFIX:BLOCK_LENGTH]
     received_known_blocks = received_blocks[:, CYCLIC_PREFIX:BLOCK_LENGTH]
@@ -81,34 +82,40 @@ def estimate_filter(sent_known_blocks: np.ndarray,
                     ) -> np.ndarray:
     """
     Estimate filter from a known sent and received block.
+    Returns a filter matrix with N_DFT columns and repeated rows.
     """
-    bins = BLOCK_LENGTH - CYCLIC_PREFIX
+    bins = BLOCK_LENGTH - CYCLIC_PREFIX        # equal to N_DFT
 
-    # FFT of sent and received known blocks
+    # FFT of sent and received known blocks across every row, each row has N_DFT columns
     sent_fourier = np.fft.fft(sent_known_blocks, axis=1)
     received_fourier = np.fft.fft(received_known_blocks, axis=1)
 
+    # Unrotate the constellation clockwise by 2πkt/N
+    # received_fourier has N_DFT columns
     received_fourier *= np.exp(-2j * np.pi * np.arange(bins) * known_block_drift / bins)
-    # variable name 'zero_forcing_filter' is misleading, it should be channel_coefficient_estimate or similar instead
-    # Zero forcing filter is the inverse of the channel coefficient estimate
-    zero_forcing_filter = received_fourier / (sent_fourier + 1e-10)
+
+    # Estimate the channel coefficient with no rotation
+    # channel_coefficient_estimate has N_DFT columns
+    channel_coefficient_estimate = received_fourier / (sent_fourier + 1e-10)
+
+    # MMSE (Wiener) filter formula, filter has N_DFT columns
     # TODO: snr to be an array since it is different for each bin
     # TODO: this requires a coarse channel coefficient estimate which can then be used in Y = X * H + N to get noise variance for better snr estimate
-    filter = np.conjugate(zero_forcing_filter) / (np.abs(zero_forcing_filter) ** 2 + 1 / snr)
-    # TODO: need further explanation of this rotation
+    filter = np.conjugate(channel_coefficient_estimate) / (np.abs(channel_coefficient_estimate) ** 2 + 1 / snr)
+
+    # The final filter is the mean of all filters, then include the unrotation in the filter
     filter = np.mean(filter, axis=0) * np.exp(-2j * np.pi * np.arange(bins) * information_block_drift / bins)
     return filter
 
 if __name__ == "__main__":
     AUDIO_PATH = "received.wav"
     signal = load_audio_file(AUDIO_PATH)
+
     received_information_blocks, filter = synchronize(signal)
     received_symbols = decode(received_information_blocks, filter)
-
     sent_symbols = get_symbols_from_bitstream(DATA)
 
     received_symbols = received_symbols[:len(sent_symbols)]
-    if len(sent_symbols) != len(received_symbols): exit('synchronization error')
     received_symbols *= np.sqrt(2) / np.mean(np.abs(received_symbols))
 
     plot_sent_received_constellation(sent_symbols, received_symbols)

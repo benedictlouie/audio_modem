@@ -69,8 +69,12 @@ def get_bitstream_from_symbols(symbols: np.ndarray) -> str:
     encoded_bitstream = np.empty(len(symbols) * BITS_PER_SYMBOL)
     encoded_bitstream[::2] = symbols.real
     encoded_bitstream[1::2] = symbols.imag
+    
     # TODO: calculate noise variance.
+    noise_variance = 0.003
+    encoded_bitstream *= 2 / noise_variance
 
+    # Stop at the last multiple of N
     encoded_bitstream = encoded_bitstream[:(len(encoded_bitstream) // CODE.N) * CODE.N]
     # encoded_bitstream = unpermute(encoded_bitstream)
 

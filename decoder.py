@@ -27,7 +27,7 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
 
     # TODO: make frame length variable 
     frameLength = 2 * BLOCK_LENGTH
-    # left_bound is the start of the first data block
+    # left_bound is the end of the chirp minus one block length
     left_bound = startIndex + CHIRP_LENGTH - frameLength//2
 
     # sync for each data block using correlation of each known block

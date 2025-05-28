@@ -7,17 +7,25 @@ from scipy.io.wavfile import write
 
 SAMPLE_RATE = 48000
 
+# Number of symbols [1:N_DFT//2] per block
 EFFECTIVE_SYMBOLS_PER_BLOCK = 2 ** 12 - 1
 CYCLIC_PREFIX = 2 ** 11
 BLOCK_LENGTH = 2 * (EFFECTIVE_SYMBOLS_PER_BLOCK + 1) + CYCLIC_PREFIX
+N_DFT = BLOCK_LENGTH - CYCLIC_PREFIX
 
+# Cut-offs because of hardware limitation
 LOW_PASS_INDEX = round(0.9 * EFFECTIVE_SYMBOLS_PER_BLOCK)
 HIGH_PASS_INDEX = round(0.01 * EFFECTIVE_SYMBOLS_PER_BLOCK)
+
+# Number of symbols after cut-offs
 SYMBOLS_PER_BLOCK = LOW_PASS_INDEX - HIGH_PASS_INDEX
 
 WIENER_SNR = 10
 
+# What is this??
 INFORMATION_TO_KNOWN_BLOCK_RATIO = 10
+
+# Number of blocks sent after LDPC
 INFORMATION_BLOCKS = 20
 
 CHIRP_TIME = 0.5
@@ -26,10 +34,12 @@ CHIRP_FACTOR = 0.1
 CHIRP_LOW = 0
 CHIRP_HIGH = 5000
 
+# QPSK
 BITS_PER_SYMBOL = 2
 
 AUDIO_PATH = "output.wav"
 
+# LDPC Settings
 DECTYPE = 'sumprod2'
 CODE = ldpc.code()
 
@@ -42,40 +52,62 @@ def write_wav(filename: str, data: np.ndarray, sample_rate: int = SAMPLE_RATE) -
     write(filename, sample_rate, data)
 
 def get_non_repeating_bits(n: int, seed: int) -> str:
+    """
+    Generate n bits from seed.
+    """
     rng = np.random.default_rng(seed=seed)
     return rng.integers(0, 2, size=n)
 
 def get_bitstream_from_symbols(symbols: np.ndarray) -> str:
     """
-    Convert symbols to a bitstream using the constellation mapping.
+    FOR DECODING
+    Convert symbols to a bitstream using the QPSK mapping.
+    Perform LDPC decoding.
     """
+
+    # Use the real and imaginary parts of the symbols to find LLR.
     encoded_bitstream = np.empty(len(symbols) * BITS_PER_SYMBOL)
     encoded_bitstream[::2] = symbols.real
     encoded_bitstream[1::2] = symbols.imag
+    # TODO: calculate noise variance.
+
     encoded_bitstream = encoded_bitstream[:(len(encoded_bitstream) // CODE.N) * CODE.N]
     # encoded_bitstream = unpermute(encoded_bitstream)
 
+    # Decode LDPC
     bitstream = np.array([])
     for i in range(0, len(encoded_bitstream), CODE.N):
-        bitstream = np.concatenate((bitstream, CODE.decode(encoded_bitstream[i:i + CODE.N], DECTYPE)[0][:CODE.K]))
+        # decoded is the final LLR after the message passing.
+        # num_iterations is capped at 200.
+        decoded, num_iterations = CODE.decode(encoded_bitstream[i:i + CODE.N], DECTYPE)
+        bitstream = np.concatenate((bitstream, decoded[:CODE.K]))
 
+    # Replace positive LLRs with 0 and negative LLRs with 1.
     bitstream = np.where(bitstream > 0, 0, 1)
     return bitstream
-    
 
 def get_symbols_from_bitstream(bitstream: str, skip_encoding: bool = False) -> np.ndarray:
     """
+    FOR ENCODING
     Convert a bitstream to symbols using the constellation mapping.
+    Perform LDPC encoding.
     """
+    
     if skip_encoding:
+        # Skip encoding if we are transforing pilot bits.
         encoded_bitstream = bitstream
     else:
+        # Pad until a multiple of CODE.K before doing LDPC
+        # TODO: pad random bits instead
         bitstream = np.concatenate((bitstream, np.zeros((-len(bitstream)) % CODE.K)))
+
+        # Encode LDPC
         encoded_bitstream = np.array([])
         for i in range(0, len(bitstream), CODE.K):
             encoded_bitstream = np.concatenate((encoded_bitstream, CODE.encode(bitstream[i:i + CODE.K])))
         # encoded_bitstream[:] = permute(encoded_bitstream)
 
+    # Turn every two bits into a QPSK symbol
     encoded_bitstream = np.where(encoded_bitstream == 0, 1, -1)
     symbols = encoded_bitstream[::2] + 1j * encoded_bitstream[1::2]
     return symbols
@@ -95,11 +127,13 @@ def plot_sent_received_constellation(sent: np.ndarray, received: np.ndarray) -> 
 
     plt.figure(figsize=(8, 8))
 
+    # Received symbols marked as dots
     for sym in unique_symbols:
         mask = sent == sym
         plt.scatter(received[mask].real, received[mask].imag,
                     color=color_map[sym], alpha=0.1, label=f'Received (Sent: {sym})')
 
+    # Sent symbols marked with an "x"
     for sym in unique_symbols:
         plt.plot(sym.real, sym.imag, 'x', markersize=12, markeredgewidth=2,
                  color=color_map[sym], label=f'Sent: {sym}')
@@ -116,6 +150,10 @@ def plot_sent_received_constellation(sent: np.ndarray, received: np.ndarray) -> 
     plt.show()
 
 def plot_error_per_bin(received: np.ndarray, sent: np.ndarray, filter: np.ndarray) -> None:
+    """
+    Plot the filter magnitude (in oragne) and the bit error rate (in blue) after applying the filter.
+    """
+
     received = np.reshape(received, (-1, SYMBOLS_PER_BLOCK))
     sent = np.reshape(sent, (-1, SYMBOLS_PER_BLOCK))
 
@@ -183,4 +221,6 @@ A luminary in academia's sphere,
 His legacy shines, year after year.
 """
 
+# Bits to be sent
+# Recall INFORMATION_BLOCKS is the number of blocks sent after LDPC.
 DATA = get_non_repeating_bits(SYMBOLS_PER_BLOCK * BITS_PER_SYMBOL * INFORMATION_BLOCKS // CODE.N * CODE.K, 69)

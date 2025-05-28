@@ -42,6 +42,5 @@ def generateAudioFromBits(bits, path):
     signal_normalized = signal / np.max(np.abs(signal))
     write(path, SAMPLING_RATE, signal_normalized.astype(np.float32))
 
-
 if __name__ == "__main__":
     generateAudioFromBits(bits, DEFAULT_AUDIO_PATH)

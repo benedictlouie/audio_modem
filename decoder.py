@@ -33,21 +33,27 @@ def signalToSymbols(signal):
     return symbols
 
 def estimate_channel_coefficients_from_pilot_symbols(received_pilot_symbols):
-    pilot_bits = generate_pilot_bits()
-    pilot_symbols = modulate(pilot_bits)
+    pilot_symbols = modulate(generate_pilot_bits())
     pilot_symbols = pilot_symbols.reshape(received_pilot_symbols.shape)
     estimated_channel_coefficients = received_pilot_symbols / pilot_symbols
     estimated_channel_coefficients = np.mean(estimated_channel_coefficients, axis=0)
-    return estimated_channel_coefficients    
+    return estimated_channel_coefficients
 
-def get_filter(channel_coefficients, shape, SNR=SNR):
-    filter = np.conjugate(channel_coefficients)/(np.abs(channel_coefficients)**2 + 1/SNR)
-    big_filter = np.empty(shape, dtype=complex)
-    for i in range(len(big_filter)):
-        big_filter[i,:] = filter
-    return big_filter
+def estimate_noise_variance(received_pilot_symbols):
+    pilot_symbols = modulate(generate_pilot_bits())
+    pilot_symbols = pilot_symbols.reshape(received_pilot_symbols.shape)
+    estimated_channel_coefficients = received_pilot_symbols / pilot_symbols
+    noise_variance = np.abs(np.mean(estimated_channel_coefficients, axis=0)) ** (-2)
+    return noise_variance
 
-def recoverSymbolsFromAudio(audio):
+def get_filter(channel_coefficients, shape, snr=SNR):
+    filter = np.conjugate(channel_coefficients)/(np.abs(channel_coefficients)**2 + 1/snr)
+    repeated_filter = np.empty(shape, dtype=complex)
+    for i in range(len(repeated_filter)):
+        repeated_filter[i,:] = filter
+    return repeated_filter
+
+def demodulateSymbolsFromAudio(audio):
     received_signal, sr = librosa.load(audio, sr=SAMPLING_RATE, mono=True)
     resampled_signal = resampleUsingStartAndEnd(received_signal)
 
@@ -56,6 +62,10 @@ def recoverSymbolsFromAudio(audio):
 
     demodulated_pilot_symbols = ofdm_blocks_freq[:NUMBER_OF_PILOT_BLOCKS, HIGH_PASS_INDEX: LOW_PASS_INDEX]
     demodulated_symbols = ofdm_blocks_freq[NUMBER_OF_PILOT_BLOCKS:, HIGH_PASS_INDEX: LOW_PASS_INDEX]
+
+    return demodulated_pilot_symbols, demodulated_symbols
+
+def recoverSentSymbols(demodulated_symbols, demodulated_pilot_symbols):
     estimated_channel_coefficients = estimate_channel_coefficients_from_pilot_symbols(demodulated_pilot_symbols)
     filter = get_filter(estimated_channel_coefficients, demodulated_symbols.shape)
     
@@ -119,17 +129,26 @@ def QPSKBitErrorRatePreLDPC(recovered_symbols, encoded_bitstream):
     decoded_bits = decoded_bits[:len(encoded_bitstream)]
     return np.sum(decoded_bits != encoded_bitstream) / len(encoded_bitstream)
 
-def decodeLDPCFromQPSK(recovered_symbols):
+def decodeLDPCFromQPSK(recovered_symbols, noise_variance=0.3):
 
     assert BITS_PER_SYMBOL == 2
     rx = recovered_symbols.flatten()
     rx = rx / np.sqrt(np.mean(np.abs(rx)**2))
 
-    LLR = np.array([[sym.real, sym.imag] for sym in rx]).flatten()
+    assert len(rx) % len(noise_variance) == 0
+    noise_variance = np.tile(noise_variance, len(rx)//len(noise_variance))
+    LLR = rx * np.sqrt(2) / noise_variance
+    LLR = np.array([[sym.real, sym.imag] for sym in LLR]).flatten()
     LLR = LLR[: len(LLR) // CODE.N * CODE.N]
+    
     bitstream = np.array([])
+    diverge_count = 0
     for i in range(0, len(LLR), CODE.N):
-        bitstream = np.concatenate((bitstream, CODE.decode(LLR[i:i + CODE.N], DECTYPE)[0][:CODE.K]))
+        decode = CODE.decode(LLR[i:i + CODE.N], DECTYPE)
+        if decode[1] >= 200: diverge_count += 1
+        bitstream = np.concatenate((bitstream, decode[0][:CODE.K]))
+    print("Diverged LDPC blocks:", diverge_count, "/", len(LLR) // CODE.N)
+
     bitstream = np.where(bitstream > 0, 0, 1)
     bitstream = bitstream[:len(bits)]
     return bitstream
@@ -141,14 +160,16 @@ if __name__ == "__main__":
     received_audio = DEFAULT_AUDIO_PATH
     received_audio = "Untitled.aifc" # your file
 
-    recovered_symbols = recoverSymbolsFromAudio(received_audio)
+    demodulated_pilot_symbols, demodulated_symbols = demodulateSymbolsFromAudio(received_audio)
+    recovered_symbols = recoverSentSymbols(demodulated_symbols, demodulated_pilot_symbols)
     sent_symbols = bitsToSymbols(bits)
 
     plotConstellationDiagram(sent_symbols, recovered_symbols)
     errorPreLDPC = QPSKBitErrorRatePreLDPC(recovered_symbols, encodeLDPC(bits))
     print("Bit error rate pre-LDPC:", errorPreLDPC)
 
-    recovered_bits = decodeLDPCFromQPSK(recovered_symbols)
+    estimated_noise_variance = estimate_noise_variance(demodulated_pilot_symbols)
+    recovered_bits = decodeLDPCFromQPSK(recovered_symbols, estimated_noise_variance)
     errorPostLDPC = QPSKBitErrorRateAfterLDPC(recovered_bits, bits)
     print("Bit error rate after LDPC:", errorPostLDPC)
 

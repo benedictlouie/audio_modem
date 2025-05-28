@@ -21,7 +21,7 @@ CHIRP_HIGH = 20000
 
 NUMBER_OF_PILOT_BLOCKS = 8
 
-LOW_PASS_INDEX = round(0.9 * FULL_SYMBOLS_PER_BLOCK)
+LOW_PASS_INDEX = round(0.8 * FULL_SYMBOLS_PER_BLOCK)
 HIGH_PASS_INDEX = round(0.01 * FULL_SYMBOLS_PER_BLOCK)
 SYMBOLS_PER_BLOCK = LOW_PASS_INDEX - HIGH_PASS_INDEX
 
@@ -34,7 +34,7 @@ MAPPING = {
     (1, 0): -1 + 1j,
     (1, 1): -1 - 1j,
 }
-MAPPING = {k: v / np.sqrt(2) for k, v in MAPPING.items()}
+MAPPING = {k: v / np.abs(v) for k, v in MAPPING.items()}
 INV_MAPPING = {v: k for k, v in MAPPING.items()}
 BITS_PER_SYMBOL = 2
 

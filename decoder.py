@@ -11,13 +11,14 @@ def decode(signal: np.ndarray, filter: np.ndarray) -> np.ndarray:
     """
     fourier = np.fft.fft(signal, axis=1) * filter
 
-    # Apply high-pass filter to remove problematic frequencies
-    symbols = fourier[:, 1 + HIGH_PASS_INDEX: 1 + HIGH_PASS_INDEX + SYMBOLS_PER_BLOCK].flatten()
+    # Apply low and high-pass filter to remove problematic frequencies
+    symbols = fourier[:, 1+HIGH_PASS_INDEX: 1+LOW_PASS_INDEX].flatten()
     return symbols
 
 def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """
     Synchronize the received signal and return the filter.
+    Returns 3 matrices with N_DFT columns and an array of length N_DFT.
     """
     chirp_signal = get_chirp()
 
@@ -71,20 +72,18 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     received_information_blocks = received_blocks[:, BLOCK_LENGTH + CYCLIC_PREFIX:]
     information_block_drift = drift[:, BLOCK_LENGTH + CYCLIC_PREFIX:]
 
-    filter = estimate_filter(sent_known_blocks, received_known_blocks, known_block_drift, information_block_drift, WIENER_SNR)
-    return received_information_blocks, filter
+    channel_coefficients, noise_variance, snr = estimate_channel_coefficients(sent_known_blocks, received_known_blocks, known_block_drift)
+    filter = estimate_filter(channel_coefficients, information_block_drift, snr)
+    return received_information_blocks, channel_coefficients, filter, noise_variance
 
-def estimate_filter(sent_known_blocks: np.ndarray,
-                    received_known_blocks: np.ndarray,
-                    known_block_drift: np.ndarray,
-                    information_block_drift: np.ndarray, 
-                    snr: float
-                    ) -> np.ndarray:
+def estimate_channel_coefficients(sent_known_blocks: np.ndarray,
+                                    received_known_blocks: np.ndarray,
+                                    known_block_drift: np.ndarray
+                                    ) -> np.ndarray:
     """
-    Estimate filter from a known sent and received block.
-    Returns a filter matrix with N_DFT columns and repeated rows.
+    Estimate channel coefficients from a known sent and received block.
+    Returns a matrix with N_DFT columns and 2 arrays with length N_DFT
     """
-    bins = BLOCK_LENGTH - CYCLIC_PREFIX        # equal to N_DFT
 
     # FFT of sent and received known blocks across every row, each row has N_DFT columns
     sent_fourier = np.fft.fft(sent_known_blocks, axis=1)
@@ -92,26 +91,52 @@ def estimate_filter(sent_known_blocks: np.ndarray,
 
     # Unrotate the constellation clockwise by 2πkt/N
     # received_fourier has N_DFT columns
-    received_fourier *= np.exp(-2j * np.pi * np.arange(bins) * known_block_drift / bins)
+    received_fourier *= np.exp(-2j * np.pi * np.arange(N_DFT) * known_block_drift / N_DFT)
 
     # Estimate the channel coefficient with no rotation
     # channel_coefficient_estimate has N_DFT columns
     channel_coefficient_estimate = received_fourier / (sent_fourier + 1e-10)
 
-    # MMSE (Wiener) filter formula, filter has N_DFT columns
-    # TODO: snr to be an array since it is different for each bin
-    # TODO: this requires a coarse channel coefficient estimate which can then be used in Y = X * H + N to get noise variance for better snr estimate
+    # noise is equal to Y - HX
+    noise = channel_coefficient_estimate * sent_fourier - received_fourier
+    noise_variance = np.var(np.abs(noise), axis=0)
+
+    # Estimate SNR from signal_power / noise_variance
+    signal_power = np.mean(np.abs(sent_fourier) ** 2, axis=0)
+    snr = signal_power / noise_variance
+
+    return channel_coefficient_estimate, noise_variance, snr
+
+def estimate_filter(channel_coefficient_estimate: np.ndarray, information_block_drift: np.ndarray, snr):
+    """
+    Estimate filter from channel_coefficients with MMSE (Wiener) filter formula
+    Returns a filter matrix with N_DFT columns and repeated rows.
+    """
+
+    # MMSE (Wiener) filter formula
     filter = np.conjugate(channel_coefficient_estimate) / (np.abs(channel_coefficient_estimate) ** 2 + 1 / snr)
 
     # The final filter is the mean of all filters, then include the unrotation in the filter
-    filter = np.mean(filter, axis=0) * np.exp(-2j * np.pi * np.arange(bins) * information_block_drift / bins)
+    filter = np.mean(filter, axis=0) * np.exp(-2j * np.pi * np.arange(N_DFT) * information_block_drift / N_DFT)
     return filter
+
+def estimate_ldpc_noise_variance(channel_coefficients: np.ndarray, sigma2: np.ndarray):
+    """
+    FOR LDPC DECODING
+    Returns sigma_k^2, an array of length SYMBOLS_PER_BLOCK.
+    """
+    # Find the mean of channel_coefficients across DFT blocks
+    # After that, channel_coefficients has length N_DFT
+    channel_coefficients = np.mean(channel_coefficients, axis=0)
+    magnitude_squared = np.abs(channel_coefficients) ** 2
+    sigmak2 = sigma2 / magnitude_squared
+    return sigmak2[1+HIGH_PASS_INDEX: 1+LOW_PASS_INDEX]
 
 if __name__ == "__main__":
     AUDIO_PATH = "received.wav"
     signal = load_audio_file(AUDIO_PATH)
 
-    received_information_blocks, filter = synchronize(signal)
+    received_information_blocks, channel_coefficients, filter, noise_variance = synchronize(signal)
     received_symbols = decode(received_information_blocks, filter)
     sent_symbols = get_symbols_from_bitstream(DATA)
 
@@ -122,6 +147,7 @@ if __name__ == "__main__":
 
     # plot_error_per_bin(received_symbols, sent_symbols, filter)
 
-    received_data = get_bitstream_from_symbols(received_symbols)[:len(DATA)]
+    ldpc_noise_variance = estimate_ldpc_noise_variance(channel_coefficients, noise_variance)
+    received_data = get_bitstream_from_symbols(received_symbols, ldpc_noise_variance)[:len(DATA)]
 
-    print(f'Bit Error Rate: {np.sum(received_data != DATA) / len(DATA) * 100:.2f}%')
+    print(f'Bit Error Rate after LDPC: {np.sum(received_data != DATA) / len(DATA) * 100:.2f}%')

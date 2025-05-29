@@ -36,6 +36,7 @@ CHIRP_HIGH = 5000
 
 # QPSK
 BITS_PER_SYMBOL = 2
+assert BITS_PER_SYMBOL == 2
 
 AUDIO_PATH = "output.wav"
 
@@ -58,7 +59,7 @@ def get_non_repeating_bits(n: int, seed: int) -> str:
     rng = np.random.default_rng(seed=seed)
     return rng.integers(0, 2, size=n)
 
-def get_bitstream_from_symbols(symbols: np.ndarray) -> str:
+def get_bitstream_from_symbols(symbols: np.ndarray, noise_variance) -> str:
     """
     FOR DECODING
     Convert symbols to a bitstream using the QPSK mapping.
@@ -66,24 +67,26 @@ def get_bitstream_from_symbols(symbols: np.ndarray) -> str:
     """
 
     # Use the real and imaginary parts of the symbols to find LLR.
-    encoded_bitstream = np.empty(len(symbols) * BITS_PER_SYMBOL)
-    encoded_bitstream[::2] = symbols.real
-    encoded_bitstream[1::2] = symbols.imag
+    LLR = np.empty(len(symbols) * BITS_PER_SYMBOL)
+    LLR[::2] = symbols.real
+    LLR[1::2] = symbols.imag
     
-    # TODO: calculate noise variance.
-    noise_variance = 0.003
-    encoded_bitstream *= 2 / noise_variance
+    # Find LLR
+    if not isinstance(noise_variance, (np.ndarray, list, tuple)): noise_variance = np.array([noise_variance])
+    assert len(LLR) % len(noise_variance) == 0
+    noise_variance = np.tile(noise_variance, len(LLR) // len(noise_variance))
+    LLR *= np.sqrt(2) * np.sqrt(2) / noise_variance
 
     # Stop at the last multiple of N
-    encoded_bitstream = encoded_bitstream[:(len(encoded_bitstream) // CODE.N) * CODE.N]
+    LLR = LLR[:(len(LLR) // CODE.N) * CODE.N]
     # encoded_bitstream = unpermute(encoded_bitstream)
 
     # Decode LDPC
     bitstream = np.array([])
-    for i in range(0, len(encoded_bitstream), CODE.N):
+    for i in range(0, len(LLR), CODE.N):
         # decoded is the final LLR after the message passing.
         # num_iterations is capped at 200.
-        decoded, num_iterations = CODE.decode(encoded_bitstream[i:i + CODE.N], DECTYPE)
+        decoded, num_iterations = CODE.decode(LLR[i:i + CODE.N], DECTYPE)
         bitstream = np.concatenate((bitstream, decoded[:CODE.K]))
 
     # Replace positive LLRs with 0 and negative LLRs with 1.
@@ -111,7 +114,7 @@ def get_symbols_from_bitstream(bitstream: str, skip_encoding: bool = False) -> n
             encoded_bitstream = np.concatenate((encoded_bitstream, CODE.encode(bitstream[i:i + CODE.K])))
         # encoded_bitstream[:] = permute(encoded_bitstream)
 
-    # Turn every two bits into a QPSK symbol
+    # Turn every two bits into a QPSK symbol [1+j, 1-j, -1-j, -1+j]
     encoded_bitstream = np.where(encoded_bitstream == 0, 1, -1)
     symbols = encoded_bitstream[::2] + 1j * encoded_bitstream[1::2]
     return symbols

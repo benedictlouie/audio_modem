@@ -28,11 +28,11 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     
     known_blocks = get_known_blocks()
 
-    # TODO: Variable frame length
-    frameLength = 2 * BLOCK_LENGTH
+    # Variable frame length
+    frameLength = (INFORMATION_BLOCKS_PER_FRAME + 1) * BLOCK_LENGTH
     
     # left_bound is the end of the chirp minus one block length
-    left_bound = startIndex + CHIRP_LENGTH - frameLength//2
+    left_bound = startIndex + CHIRP_LENGTH - BLOCK_LENGTH
 
     # sync for each data block using correlation of each known block
     sync_indices = np.array([])
@@ -40,11 +40,11 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     while left_bound + frameLength < endIndex:
         index = int(np.argmax(np.correlate(signal[left_bound:left_bound + frameLength], known_blocks[current_index]))) + left_bound
         sync_indices = np.append(sync_indices, index)
-        left_bound = index + frameLength // 2
+        left_bound = index + frameLength - BLOCK_LENGTH
 
         current_index += 1
 
-    # indices are the theoretical start indices of each data block - found by adding the frame length to the start index of the first data block
+    # indices are the theoretical start indices of each known block - found by adding the frame length to the start index of the first known block
     indices = np.arange(current_index) * frameLength + startIndex + CHIRP_LENGTH
 
     # Find the drift gradient by regression of the theoretical indices and the indices found by synchronization.
@@ -62,15 +62,22 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     drift = extracted_indices - frame_indices
 
     # Extract relevant blocks we want
-    received_blocks = signal[extracted_indices]
+    received_frames = signal[extracted_indices]
 
     # Get the known blocks and informations blocks and their drift. All have N_DFT columns right now.
-    # TODO: Variable frame length
+    
     sent_known_blocks = known_blocks[:, CYCLIC_PREFIX:BLOCK_LENGTH]
     known_block_drift = drift[:, CYCLIC_PREFIX:BLOCK_LENGTH]
-    received_known_blocks = received_blocks[:, CYCLIC_PREFIX:BLOCK_LENGTH]
-    received_information_blocks = received_blocks[:, BLOCK_LENGTH + CYCLIC_PREFIX:]
-    information_block_drift = drift[:, BLOCK_LENGTH + CYCLIC_PREFIX:]
+    received_known_blocks = received_frames[:, CYCLIC_PREFIX:BLOCK_LENGTH]
+    # TODO: Variable frame length implementation
+    received_information_frame = received_frames[:, BLOCK_LENGTH:]
+    received_information_blocks = np.reshape(received_information_frame, (-1, BLOCK_LENGTH))
+    # remove cyclic prefix and flatten
+    received_information_blocks = received_information_blocks[:, CYCLIC_PREFIX:]
+
+    # TODO: Check whether the drift across the cyclic prefix is accounted for correctly
+    information_block_drift = drift[:, BLOCK_LENGTH :]
+    information_block_drift = np.reshape(information_block_drift, (-1, BLOCK_LENGTH))[:, CYCLIC_PREFIX:]
 
     # TODO: snr is now per frequency bin, but error is higher!
     channel_coefficients, noise_variance, snr = estimate_channel_coefficients(sent_known_blocks, received_known_blocks, known_block_drift)
@@ -99,7 +106,8 @@ def estimate_channel_coefficients(sent_known_blocks: np.ndarray,
     channel_coefficient_estimate = received_fourier / (sent_fourier + 1e-10)
 
     # noise is equal to Y - HX
-    noise = channel_coefficient_estimate * sent_fourier - received_fourier
+    mean_channel_coefficient = np.mean(channel_coefficient_estimate, axis=0)
+    noise = mean_channel_coefficient * sent_fourier - received_fourier
     noise_variance = np.var(np.abs(noise), axis=0)
 
     # Estimate SNR from signal_power / noise_variance

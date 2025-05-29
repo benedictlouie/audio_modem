@@ -22,8 +22,8 @@ SYMBOLS_PER_BLOCK = LOW_PASS_INDEX - HIGH_PASS_INDEX
 
 WIENER_SNR = 10
 
-# What is this??
-INFORMATION_TO_KNOWN_BLOCK_RATIO = 10
+# number of information blocks following each known block
+INFORMATION_BLOCKS_PER_FRAME = 5
 
 # Number of blocks sent after LDPC
 INFORMATION_BLOCKS = 20

@@ -75,7 +75,7 @@ def get_bitstream_from_symbols(symbols: np.ndarray, noise_variance) -> str:
     if not isinstance(noise_variance, (np.ndarray, list, tuple)): noise_variance = np.array([noise_variance])
     assert len(LLR) % len(noise_variance) == 0
     noise_variance = np.tile(noise_variance, len(LLR) // len(noise_variance))
-    LLR *= np.sqrt(2) * np.sqrt(2) / noise_variance
+    LLR *= np.sqrt(2) / noise_variance
 
     # Stop at the last multiple of N
     LLR = LLR[:(len(LLR) // CODE.N) * CODE.N]

@@ -113,7 +113,7 @@ def estimate_channel_coefficients(sent_known_blocks: np.ndarray,
     snr = signal_power / noise_var
     
     # Compute noise variance for LDPC coding
-    noise_var = np.mean(np.real(noise) ** 2, axis=0)
+    noise_var = np.mean(np.real(noise) ** 2, axis=0) / np.sqrt(signal_power)
 
     return channel_coefficient_estimate, noise_var, snr
 
@@ -158,6 +158,6 @@ if __name__ == "__main__":
     # plot_error_per_bin(received_symbols, sent_symbols, filter)
 
     ldpc_noise_variance = estimate_ldpc_noise_variance(channel_coefficients, noise_var)
-    received_data = get_bitstream_from_symbols(received_symbols, 1e-10)[:len(DATA)]
+    received_data = get_bitstream_from_symbols(received_symbols, ldpc_noise_variance)[:len(DATA)]
 
     print(f'Bit Error Rate after LDPC: {np.sum(received_data != DATA) / len(DATA) * 100:.2f}%')

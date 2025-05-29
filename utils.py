@@ -83,11 +83,14 @@ def get_bitstream_from_symbols(symbols: np.ndarray, noise_variance) -> str:
 
     # Decode LDPC
     bitstream = np.array([])
+    divergeCount = 0
     for i in range(0, len(LLR), CODE.N):
         # decoded is the final LLR after the message passing.
         # num_iterations is capped at 200.
         decoded, num_iterations = CODE.decode(LLR[i:i + CODE.N], DECTYPE)
+        if num_iterations >= 200: divergeCount += 1
         bitstream = np.concatenate((bitstream, decoded[:CODE.K]))
+    print("Diverged:", divergeCount, "/", len(LLR)//CODE.N)
 
     # Replace positive LLRs with 0 and negative LLRs with 1.
     bitstream = np.where(bitstream > 0, 0, 1)

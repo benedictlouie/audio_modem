@@ -78,9 +78,9 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     information_block_drift = drift[:, BLOCK_LENGTH:]
     information_block_drift = np.reshape(information_block_drift, (-1, BLOCK_LENGTH))[:, CYCLIC_PREFIX:] # N_DFT columns
 
-    channel_coefficients, noise_mag_variance, snr = estimate_channel_coefficients(sent_known_blocks, received_known_blocks, known_block_drift)
+    channel_coefficients, noise_var, snr = estimate_channel_coefficients(sent_known_blocks, received_known_blocks, known_block_drift)
     filter = estimate_filter(channel_coefficients, information_block_drift, snr)
-    return received_information_blocks, channel_coefficients, filter, noise_mag_variance
+    return received_information_blocks, channel_coefficients, filter, noise_var
 
 def estimate_channel_coefficients(sent_known_blocks: np.ndarray,
                                     received_known_blocks: np.ndarray,
@@ -106,13 +106,16 @@ def estimate_channel_coefficients(sent_known_blocks: np.ndarray,
     # noise is equal to Y - HX
     mean_channel_coefficient = np.mean(channel_coefficient_estimate, axis=0)
     noise = mean_channel_coefficient * sent_fourier - received_fourier
-    noise_mag_variance = np.var(np.abs(noise), axis=0)
+    noise_var = np.mean(np.abs(noise) ** 2, axis=0)
 
-    # Estimate SNR from signal_power / noise_mag_variance
+    # Estimate SNR from signal_power / noise_var
     signal_power = np.mean(np.abs(sent_fourier) ** 2, axis=0)
-    snr = signal_power / noise_mag_variance
+    snr = signal_power / noise_var
+    
+    # Compute noise variance for LDPC coding
+    noise_var = np.mean(np.real(noise) ** 2, axis=0)
 
-    return channel_coefficient_estimate, noise_mag_variance, snr
+    return channel_coefficient_estimate, noise_var, snr
 
 def estimate_filter(channel_coefficient_estimate: np.ndarray, information_block_drift: np.ndarray, snr):
     """
@@ -127,7 +130,7 @@ def estimate_filter(channel_coefficient_estimate: np.ndarray, information_block_
     filter = np.mean(filter, axis=0) * np.exp(-2j * np.pi * np.arange(N_DFT) * information_block_drift / N_DFT)
     return filter
 
-def estimate_ldpc_noise_variance(channel_coefficients: np.ndarray, sigma2: np.ndarray):
+def estimate_ldpc_noise_variance(channel_coefficients: np.ndarray, sigma2):
     """
     FOR LDPC DECODING
     Returns sigma_k^2, an array of length SYMBOLS_PER_BLOCK.
@@ -143,7 +146,7 @@ if __name__ == "__main__":
     AUDIO_PATH = "received.wav"
     signal = load_audio_file(AUDIO_PATH)
 
-    received_information_blocks, channel_coefficients, filter, noise_mag_variance = synchronize(signal)
+    received_information_blocks, channel_coefficients, filter, noise_var = synchronize(signal)
     received_symbols = decode(received_information_blocks, filter)
     sent_symbols = get_symbols_from_bitstream(DATA)
 
@@ -154,7 +157,7 @@ if __name__ == "__main__":
 
     # plot_error_per_bin(received_symbols, sent_symbols, filter)
 
-    ldpc_noise_variance = estimate_ldpc_noise_variance(channel_coefficients, noise_mag_variance/0.4292)
-    received_data = get_bitstream_from_symbols(received_symbols, ldpc_noise_variance)[:len(DATA)]
+    ldpc_noise_variance = estimate_ldpc_noise_variance(channel_coefficients, noise_var)
+    received_data = get_bitstream_from_symbols(received_symbols, 1e-10)[:len(DATA)]
 
     print(f'Bit Error Rate after LDPC: {np.sum(received_data != DATA) / len(DATA) * 100:.2f}%')

@@ -41,7 +41,6 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         index = int(np.argmax(np.correlate(signal[left_bound:left_bound + frameLength], known_blocks[current_index]))) + left_bound
         sync_indices = np.append(sync_indices, index)
         left_bound = index + frameLength - BLOCK_LENGTH
-
         current_index += 1
 
     # indices are the theoretical start indices of each known block - found by adding the frame length to the start index of the first known block
@@ -141,7 +140,7 @@ def estimate_ldpc_noise_variance(channel_coefficients: np.ndarray, sigma2: np.nd
     return sigmak2[1+HIGH_PASS_INDEX: 1+LOW_PASS_INDEX]
 
 if __name__ == "__main__":
-    # AUDIO_PATH = "received.wav"
+    AUDIO_PATH = "received.wav"
     signal = load_audio_file(AUDIO_PATH)
 
     received_information_blocks, channel_coefficients, filter, noise_mag_variance = synchronize(signal)

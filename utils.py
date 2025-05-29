@@ -1,4 +1,5 @@
 import contextlib
+import os
 import ldpc
 import librosa
 import matplotlib.pyplot as plt
@@ -22,11 +23,11 @@ SYMBOLS_PER_BLOCK = LOW_PASS_INDEX - HIGH_PASS_INDEX
 
 WIENER_SNR = 10
 
-# number of information blocks following each known block
+# Number of information blocks following each known block
 INFORMATION_BLOCKS_PER_FRAME = 4
 
-# Number of blocks sent after LDPC
-INFORMATION_BLOCKS = 20
+# Number of frames sent after LDPC
+FRAMES = 5
 
 CHIRP_TIME = 0.5
 CHIRP_LENGTH = round(CHIRP_TIME * SAMPLE_RATE)
@@ -59,7 +60,7 @@ def get_non_repeating_bits(n: int, seed: int) -> str:
     rng = np.random.default_rng(seed=seed)
     return rng.integers(0, 2, size=n)
 
-def get_bitstream_from_symbols(symbols: np.ndarray, noise_variance) -> str:
+def get_bitstream_from_symbols(symbols: np.ndarray, noise_variance) -> np.ndarray:
     """
     FOR DECODING
     Convert symbols to a bitstream using the QPSK mapping.
@@ -96,7 +97,7 @@ def get_bitstream_from_symbols(symbols: np.ndarray, noise_variance) -> str:
     bitstream = np.where(bitstream > 0, 0, 1)
     return bitstream
 
-def get_symbols_from_bitstream(bitstream: str, skip_encoding: bool = False) -> np.ndarray:
+def get_symbols_from_bitstream(bitstream: np.ndarray, skip_encoding: bool = False) -> np.ndarray:
     """
     FOR ENCODING
     Convert a bitstream to symbols using the constellation mapping.
@@ -204,6 +205,49 @@ def text_to_binary(text: str) -> str:
 def binary_to_text(binary_str: str) -> str:
     return ''.join(chr(int(binary_str[i:i+8], 2)) for i in range(0, len(binary_str), 8))
 
+def encode_file_to_bits(input_filepath: str) -> np.ndarray:
+    filename = os.path.basename(input_filepath)
+    with open(input_filepath, "rb") as f:
+        data = f.read()
+    bit_size = len(data) * 8
+
+    bits_filename = np.unpackbits(np.frombuffer(filename.encode('utf-8'), dtype=np.uint8))
+    bits_null = np.unpackbits(np.frombuffer(b'\x00', dtype=np.uint8))
+    bits_bit_size = np.unpackbits(np.frombuffer(str(bit_size).encode('utf-8'), dtype=np.uint8))
+    bits_data = np.unpackbits(np.frombuffer(data, dtype=np.uint8))
+
+    # Concatenate all parts
+    full_bits = np.concatenate([
+        bits_filename, bits_null,
+        bits_bit_size, bits_null,
+        bits_data
+    ])
+
+    return full_bits.astype(np.uint8)
+
+def decode_bits_to_file(bits: np.ndarray, output_dir: str = "."):
+    byte_data = np.packbits(bits).tobytes()
+    
+    # Split byte data at null bytes (up to 2 times)
+    parts = byte_data.split(b'\x00', 2)
+    if len(parts) < 3:
+        raise ValueError("Invalid encoded format")
+
+    filename_bytes, bit_size_bytes, file_data = parts
+
+    try:
+        filename = filename_bytes.decode('utf-8')
+        bit_size = int(bit_size_bytes.decode('utf-8'))
+        file_data = file_data[:bit_size]
+    except Exception as e:
+        raise ValueError("Failed to parse metadata") from e
+
+    output_path = os.path.join(output_dir, "Copy of " + filename)
+    with open(output_path, "wb") as f:
+        f.write(file_data)
+
+    print(f"Decoded file written to: {output_path}")
+
 POEM = """In Cambridge's halls where knowledge flows,
 A beacon of wisdom, his presence shows.
 From Zürich's peaks to England's plains,
@@ -230,6 +274,27 @@ A luminary in academia's sphere,
 His legacy shines, year after year.
 """
 
-# Bits to be sent
-# Recall INFORMATION_BLOCKS is the number of blocks sent after LDPC.
-DATA = get_non_repeating_bits(SYMBOLS_PER_BLOCK * BITS_PER_SYMBOL * INFORMATION_BLOCKS // CODE.N * CODE.K, 69)
+# Pad until we have TARGET_FACTOR bits
+TARGET_FACTOR = SYMBOLS_PER_BLOCK * BITS_PER_SYMBOL * INFORMATION_BLOCKS_PER_FRAME // CODE.N * CODE.K
+
+SEND = 0 # 0 for random bits, 1 for text, 2 for file
+assert SEND in [0, 1, 2]
+
+DATA = get_non_repeating_bits(FRAMES * TARGET_FACTOR, 69)
+if SEND == 1:
+    bin = text_to_binary(POEM)
+    bin = [int(bit) for bit in bin]
+    DATA = np.array(bin)
+elif SEND == 2:
+    DATA = encode_file_to_bits("challenge/output/6.wav")
+
+# Pad until we have TARGET_FACTOR bits
+DATA = np.concatenate((DATA, np.zeros((-len(DATA)) % TARGET_FACTOR)))
+assert len(DATA) % TARGET_FACTOR == 0
+FRAMES = len(DATA) // TARGET_FACTOR
+
+# Minimum 2 frames
+while FRAMES < 2:
+    DATA = np.concatenate((DATA, np.zeros(TARGET_FACTOR)))
+    FRAMES += 1
+print("Number of frames:", FRAMES)

@@ -161,3 +161,11 @@ if __name__ == "__main__":
     received_data = get_bitstream_from_symbols(received_symbols, ldpc_noise_variance)[:len(DATA)]
 
     print(f'Bit Error Rate after LDPC: {np.sum(received_data != DATA) / len(DATA) * 100:.2f}%')
+
+    if SEND == 1:
+        print("\nDecoded:")
+        received_data = ''.join([str(bit) for bit in received_data])
+        print(binary_to_text(received_data))
+    elif SEND == 2:
+        decode_bits_to_file(received_data)
+        print("\nFile successfully received and saved.")

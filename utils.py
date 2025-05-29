@@ -105,8 +105,7 @@ def get_symbols_from_bitstream(bitstream: str, skip_encoding: bool = False) -> n
         encoded_bitstream = bitstream
     else:
         # Pad until a multiple of CODE.K before doing LDPC
-        # TODO: pad random bits instead
-        bitstream = np.concatenate((bitstream, np.zeros((-len(bitstream)) % CODE.K)))
+        bitstream = np.concatenate((bitstream, np.random.randint(2, size=(-len(bitstream)) % CODE.K)))
 
         # Encode LDPC
         encoded_bitstream = np.array([])

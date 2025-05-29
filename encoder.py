@@ -7,16 +7,16 @@ def encode(symbols: np.ndarray) -> np.ndarray:
     Encode a bitstream into a time-domain signal using IFFT and add a cyclic prefix in front.
     """
 
-    # TODO: pad random symbols instead of zero
     # Pad until a multiple of SYMBOLS_PER_BLOCK
-    
-    symbols = np.concatenate((symbols, np.repeat(1 + 1j, (-len(symbols)) % SYMBOLS_PER_BLOCK))).reshape(-1, SYMBOLS_PER_BLOCK)
+    constellation = [1+1j, 1-1j, -1-1j, -1+1j]
+    paddingSymbols = np.random.choice(constellation, size=(-len(symbols)) % SYMBOLS_PER_BLOCK)
+    symbols = np.concatenate((symbols, paddingSymbols)).reshape(-1, SYMBOLS_PER_BLOCK)
 
     # Fill unused frequency bins
     # After that, symbols is a matrix with EFFECTIVE_SYMBOLS_PER_BLOCK columns
-    symbols = np.concatenate((np.zeros((symbols.shape[0], HIGH_PASS_INDEX)),
+    symbols = np.concatenate((np.random.choice(constellation, size=(symbols.shape[0], HIGH_PASS_INDEX)),
                               symbols,
-                              np.zeros((symbols.shape[0], EFFECTIVE_SYMBOLS_PER_BLOCK - LOW_PASS_INDEX)),
+                              np.random.choice(constellation, size=(symbols.shape[0], EFFECTIVE_SYMBOLS_PER_BLOCK - LOW_PASS_INDEX)),
                             ), axis=1)
     
     # Add zeros to the zeroth bin and do conjugate symmetry

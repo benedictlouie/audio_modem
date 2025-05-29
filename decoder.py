@@ -17,7 +17,6 @@ def resampleUsingStartAndEnd(signal):
 
     NUMBER_OF_BLOCKS_WITH_CODING = round((len(extracted_ofdm) - CHIRP_LENGTH) / BLOCK_LENGTH) - NUMBER_OF_PILOT_BLOCKS
     expected_length = CHIRP_LENGTH + BLOCK_LENGTH * (NUMBER_OF_PILOT_BLOCKS + NUMBER_OF_BLOCKS_WITH_CODING)
-    print("Expected length:", expected_length)
 
     sampling_ratio = expected_length / len(extracted_ofdm)
     extracted_resampled = librosa.resample(extracted_ofdm, orig_sr=SAMPLING_RATE, target_sr=SAMPLING_RATE * sampling_ratio)
@@ -62,8 +61,8 @@ def demodulateSymbolsFromAudio(audio):
     ofdm_blocks_time = resampled_signal.reshape((-1, BLOCK_LENGTH))
     ofdm_blocks_freq = signalToSymbols(ofdm_blocks_time)
 
-    demodulated_pilot_symbols = ofdm_blocks_freq[:NUMBER_OF_PILOT_BLOCKS, HIGH_PASS_INDEX: LOW_PASS_INDEX]
-    demodulated_symbols = ofdm_blocks_freq[NUMBER_OF_PILOT_BLOCKS:, HIGH_PASS_INDEX: LOW_PASS_INDEX]
+    demodulated_pilot_symbols = ofdm_blocks_freq[:NUMBER_OF_PILOT_BLOCKS, 1+HIGH_PASS_INDEX: 1+LOW_PASS_INDEX]
+    demodulated_symbols = ofdm_blocks_freq[NUMBER_OF_PILOT_BLOCKS:, 1+HIGH_PASS_INDEX: 1+LOW_PASS_INDEX]
 
     return demodulated_pilot_symbols, demodulated_symbols
 

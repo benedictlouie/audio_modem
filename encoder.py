@@ -8,7 +8,7 @@ def symbolsToSignal(symbols):
         freq = np.zeros(N_DFT, dtype=complex)
         for i in range(1, FULL_SYMBOLS_PER_BLOCK+1):
             freq[i] = np.random.choice(list(MAPPING.values()))
-        freq[HIGH_PASS_INDEX: LOW_PASS_INDEX] = data
+        freq[1+HIGH_PASS_INDEX: 1+LOW_PASS_INDEX] = data
         freq[-FULL_SYMBOLS_PER_BLOCK:] = np.conj(freq[1:FULL_SYMBOLS_PER_BLOCK+1][::-1])
         time = np.fft.ifft(freq)
         time = np.real(time)
@@ -21,7 +21,7 @@ def generateAudioFromBits(bits, path):
 
     symbols = bitsToSymbols(bits)
     ofdm_blocks = symbolsToSignal(symbols)
-    print("Actual length:", CHIRP_LENGTH + BLOCK_LENGTH * (NUMBER_OF_PILOT_BLOCKS + len(ofdm_blocks)))
+    # print("Actual length:", CHIRP_LENGTH + BLOCK_LENGTH * (NUMBER_OF_PILOT_BLOCKS + len(ofdm_blocks)))
 
     pilot_bits = generate_pilot_bits()
     pilot_symbols = modulate(pilot_bits)

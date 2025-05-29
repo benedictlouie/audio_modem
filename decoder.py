@@ -72,6 +72,7 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     received_information_blocks = received_blocks[:, BLOCK_LENGTH + CYCLIC_PREFIX:]
     information_block_drift = drift[:, BLOCK_LENGTH + CYCLIC_PREFIX:]
 
+    # TODO: snr is now per frequency bin, but error is higher!
     channel_coefficients, noise_variance, snr = estimate_channel_coefficients(sent_known_blocks, received_known_blocks, known_block_drift)
     filter = estimate_filter(channel_coefficients, information_block_drift, snr)
     return received_information_blocks, channel_coefficients, filter, noise_variance

@@ -1,6 +1,7 @@
 import contextlib
 import os
 import ldpc
+# import ldpc_jossy.py.ldpc as ldpc
 import librosa
 import matplotlib.pyplot as plt
 import numpy as np
@@ -15,8 +16,8 @@ BLOCK_LENGTH = 2 * (EFFECTIVE_SYMBOLS_PER_BLOCK + 1) + CYCLIC_PREFIX
 N_DFT = BLOCK_LENGTH - CYCLIC_PREFIX
 
 # Cut-offs because of hardware limitation
-LOW_PASS_INDEX = round(0.9 * EFFECTIVE_SYMBOLS_PER_BLOCK)
-HIGH_PASS_INDEX = round(0.01 * EFFECTIVE_SYMBOLS_PER_BLOCK)
+LOW_PASS_INDEX = 2423#round(0.9 * EFFECTIVE_SYMBOLS_PER_BLOCK)
+HIGH_PASS_INDEX = 41#round(0.01 * EFFECTIVE_SYMBOLS_PER_BLOCK)
 
 # Number of symbols after cut-offs
 SYMBOLS_PER_BLOCK = LOW_PASS_INDEX - HIGH_PASS_INDEX
@@ -31,7 +32,7 @@ FRAMES = 5
 
 CHIRP_TIME = 0.5
 CHIRP_LENGTH = round(CHIRP_TIME * SAMPLE_RATE)
-CHIRP_FACTOR = 0.1
+CHIRP_FACTOR = 0.008
 CHIRP_LOW = 0
 CHIRP_HIGH = 5000
 
@@ -128,6 +129,8 @@ def plot_sent_received_constellation(sent: np.ndarray, received: np.ndarray) -> 
     Sent symbols are used to color received ones, and ideal sent locations are also shown.
     """
 
+    received = received[:len(sent)]
+
     # received = np.reshape(received, (-1, SYMBOLS_PER_BLOCK))[:,SYMBOLS_PER_BLOCK*9//10:SYMBOLS_PER_BLOCK].flatten()
     # sent = np.reshape(sent, (-1, SYMBOLS_PER_BLOCK))[:,SYMBOLS_PER_BLOCK*9//10:SYMBOLS_PER_BLOCK].flatten()
 
@@ -163,6 +166,10 @@ def plot_error_per_bin(received: np.ndarray, sent: np.ndarray, filter: np.ndarra
     """
     Plot the filter magnitude (in oragne) and the bit error rate (in blue) after applying the filter.
     """
+
+    # Remove the last DFT block
+    received = received[:(FRAMES * INFORMATION_BLOCKS_PER_FRAME - 1) * SYMBOLS_PER_BLOCK]
+    sent = sent[:(FRAMES * INFORMATION_BLOCKS_PER_FRAME - 1) * SYMBOLS_PER_BLOCK]
 
     received = np.reshape(received, (-1, SYMBOLS_PER_BLOCK))
     sent = np.reshape(sent, (-1, SYMBOLS_PER_BLOCK))
@@ -277,7 +284,7 @@ His legacy shines, year after year.
 # Pad until we have TARGET_FACTOR bits
 TARGET_FACTOR = SYMBOLS_PER_BLOCK * BITS_PER_SYMBOL * INFORMATION_BLOCKS_PER_FRAME // CODE.N * CODE.K
 
-SEND = 0 # 0 for random bits, 1 for text, 2 for file
+SEND = 1 # 0 for random bits, 1 for text, 2 for file
 assert SEND in [0, 1, 2]
 
 DATA = get_non_repeating_bits(FRAMES * TARGET_FACTOR, 69)
@@ -289,6 +296,7 @@ elif SEND == 2:
     DATA = encode_file_to_bits("challenge/output/6.wav")
 
 # Pad until we have TARGET_FACTOR bits
+# TODO: pad random bits not zeros
 DATA = np.concatenate((DATA, np.zeros((-len(DATA)) % TARGET_FACTOR)))
 assert len(DATA) % TARGET_FACTOR == 0
 FRAMES = len(DATA) // TARGET_FACTOR

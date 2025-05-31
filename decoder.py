@@ -150,12 +150,9 @@ if __name__ == "__main__":
     received_symbols = decode(received_information_blocks, filter)
     sent_symbols = get_symbols_from_bitstream(DATA)
 
-    received_symbols = received_symbols[:len(sent_symbols)]
-    received_symbols *= np.sqrt(2) / np.mean(np.abs(received_symbols))
-
     plot_sent_received_constellation(sent_symbols, received_symbols)
 
-    # plot_error_per_bin(received_symbols, sent_symbols, filter)
+    plot_error_per_bin(received_symbols, sent_symbols, filter)
 
     ldpc_noise_variance = estimate_ldpc_noise_variance(channel_coefficients, noise_var)
     received_data = get_bitstream_from_symbols(received_symbols, ldpc_noise_variance)[:len(DATA)]

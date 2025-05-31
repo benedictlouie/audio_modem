@@ -31,7 +31,7 @@ def encode(symbols: np.ndarray) -> np.ndarray:
     # Flatten the signal    
     symbolsInTime = np.fft.ifft(encoded_symbols, axis=1).real
     signal = np.concatenate((symbolsInTime[:, -CYCLIC_PREFIX:], symbolsInTime), axis=1).flatten()
-    return signal / np.max(np.abs(signal))
+    return signal
 
 def insert_known_blocks(signal: np.ndarray) -> np.ndarray:
     """

@@ -296,12 +296,12 @@ elif SEND == 2:
     DATA = encode_file_to_bits("challenge/output/6.wav")
 
 # Pad until we have TARGET_FACTOR bits
-DATA = np.concatenate((DATA, np.random.randint(2, size=(-len(DATA)) % TARGET_FACTOR)))
+DATA = np.concatenate((DATA, get_non_repeating_bits((-len(DATA)) % TARGET_FACTOR, 22)))
 assert len(DATA) % TARGET_FACTOR == 0
 FRAMES = len(DATA) // TARGET_FACTOR
 
 # Minimum 2 frames
 while FRAMES < 2:
-    DATA = np.concatenate((DATA, np.random.randint(2, size=TARGET_FACTOR)))
+    DATA = np.concatenate((DATA, get_non_repeating_bits(TARGET_FACTOR, 22)))
     FRAMES += 1
 print("Number of frames:", FRAMES)

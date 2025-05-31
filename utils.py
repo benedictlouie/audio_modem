@@ -302,6 +302,6 @@ FRAMES = len(DATA) // TARGET_FACTOR
 
 # Minimum 2 frames
 while FRAMES < 2:
-    DATA = np.concatenate((DATA, np.zeros(TARGET_FACTOR)))
+    DATA = np.concatenate((DATA, np.random.randint(2, size=TARGET_FACTOR)))
     FRAMES += 1
 print("Number of frames:", FRAMES)

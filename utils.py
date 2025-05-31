@@ -296,8 +296,7 @@ elif SEND == 2:
     DATA = encode_file_to_bits("challenge/output/6.wav")
 
 # Pad until we have TARGET_FACTOR bits
-# TODO: pad random bits not zeros
-DATA = np.concatenate((DATA, np.zeros((-len(DATA)) % TARGET_FACTOR)))
+DATA = np.concatenate((DATA, np.random.randint(2, size=(-len(DATA)) % TARGET_FACTOR)))
 assert len(DATA) % TARGET_FACTOR == 0
 FRAMES = len(DATA) // TARGET_FACTOR
 

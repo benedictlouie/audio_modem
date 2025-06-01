@@ -85,16 +85,12 @@ def get_bitstream_from_symbols(symbols: np.ndarray, noise_variance) -> np.ndarra
 
     # Decode LDPC
     bitstream = np.array([])
-    divergeCount = 0
     for i in range(0, len(LLR), CODE.N):
         # decoded is the final LLR after the message passing.
         # num_iterations is capped at 200.
         decoded, num_iterations = CODE.decode(LLR[i:i + CODE.N], DECTYPE)
-        if num_iterations >= 200:
-            divergeCount += 1
         # Only the first K bits matter due to the systematic generator matrix 
         bitstream = np.concatenate((bitstream, decoded[:CODE.K]))
-    print("Diverged:", divergeCount, "/", len(LLR)//CODE.N)
 
     # Replace positive LLRs with 0 and negative LLRs with 1.
     bitstream = np.where(bitstream > 0, 0, 1)
@@ -247,7 +243,7 @@ def decode_bits_to_file(bits: np.ndarray, output_dir: str = "."):
     try:
         filename = filename_bytes.decode('utf-8')
         bit_size = int(bit_size_bytes.decode('utf-8'))
-        file_data = file_data[:bit_size]
+        file_data = file_data[:(bit_size + 7) // 8]
     except Exception as e:
         raise ValueError("Failed to parse metadata") from e
 
@@ -286,7 +282,7 @@ His legacy shines, year after year.
 # Pad until we have TARGET_FACTOR bits
 TARGET_FACTOR = SYMBOLS_PER_BLOCK * BITS_PER_SYMBOL * INFORMATION_BLOCKS_PER_FRAME // CODE.N * CODE.K
 
-SEND = 2 # 0 for random bits, 1 for text, 2 for file
+SEND = 0 # 0 for random bits, 1 for text, 2 for file
 assert SEND in [0, 1, 2]
 
 DATA = get_non_repeating_bits(FRAMES * TARGET_FACTOR, 69)
@@ -306,4 +302,4 @@ FRAMES = len(DATA) // TARGET_FACTOR
 while FRAMES < 2:
     DATA = np.concatenate((DATA, get_non_repeating_bits(TARGET_FACTOR, 22)))
     FRAMES += 1
-print("Number of frames:", FRAMES)
+print("There are", FRAMES, "frames.")

@@ -162,7 +162,7 @@ if __name__ == "__main__":
     if SEND == 1:
         print("\nDecoded:")
         received_data = ''.join([str(bit) for bit in received_data])
-        print(binary_to_text(received_data))
+        print(binary_to_text(received_data)[:len(POEM)])
     elif SEND == 2:
         decode_bits_to_file(received_data)
         print("\nFile successfully received and saved.")

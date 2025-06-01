@@ -9,7 +9,7 @@ def encode(symbols: np.ndarray) -> np.ndarray:
 
     # Pad until a multiple of SYMBOLS_PER_BLOCK
     constellation = [1+1j, 1-1j, -1-1j, -1+1j]
-    paddingSymbols = np.random.choice(constellation, size=(-len(symbols)) % SYMBOLS_PER_BLOCK)
+    paddingSymbols = np.random.choice(constellation, size=(-len(symbols)) % (SYMBOLS_PER_BLOCK * FRAMES))
     symbols = np.concatenate((symbols, paddingSymbols)).reshape(-1, SYMBOLS_PER_BLOCK)
 
     # Fill unused frequency bins

@@ -90,7 +90,9 @@ def get_bitstream_from_symbols(symbols: np.ndarray, noise_variance) -> np.ndarra
         # decoded is the final LLR after the message passing.
         # num_iterations is capped at 200.
         decoded, num_iterations = CODE.decode(LLR[i:i + CODE.N], DECTYPE)
-        if num_iterations >= 200: divergeCount += 1
+        if num_iterations >= 200:
+            divergeCount += 1
+        # Only the first K bits matter due to the systematic generator matrix 
         bitstream = np.concatenate((bitstream, decoded[:CODE.K]))
     print("Diverged:", divergeCount, "/", len(LLR)//CODE.N)
 
@@ -167,9 +169,9 @@ def plot_error_per_bin(received: np.ndarray, sent: np.ndarray, filter: np.ndarra
     Plot the filter magnitude (in oragne) and the bit error rate (in blue) after applying the filter.
     """
 
-    # Remove the last DFT block
-    received = received[:(FRAMES * INFORMATION_BLOCKS_PER_FRAME - 1) * SYMBOLS_PER_BLOCK]
-    sent = sent[:(FRAMES * INFORMATION_BLOCKS_PER_FRAME - 1) * SYMBOLS_PER_BLOCK]
+    # Negelct the last DFT blocks
+    received = received[: len(sent) // SYMBOLS_PER_BLOCK * SYMBOLS_PER_BLOCK]
+    sent = sent[: len(sent) // SYMBOLS_PER_BLOCK * SYMBOLS_PER_BLOCK]
 
     received = np.reshape(received, (-1, SYMBOLS_PER_BLOCK))
     sent = np.reshape(sent, (-1, SYMBOLS_PER_BLOCK))
@@ -284,7 +286,7 @@ His legacy shines, year after year.
 # Pad until we have TARGET_FACTOR bits
 TARGET_FACTOR = SYMBOLS_PER_BLOCK * BITS_PER_SYMBOL * INFORMATION_BLOCKS_PER_FRAME // CODE.N * CODE.K
 
-SEND = 1 # 0 for random bits, 1 for text, 2 for file
+SEND = 2 # 0 for random bits, 1 for text, 2 for file
 assert SEND in [0, 1, 2]
 
 DATA = get_non_repeating_bits(FRAMES * TARGET_FACTOR, 69)

@@ -81,7 +81,6 @@ def get_bitstream_from_symbols(symbols: np.ndarray, noise_variance) -> np.ndarra
 
     # Stop at the last multiple of N
     LLR = LLR[:(len(LLR) // CODE.N) * CODE.N]
-    # encoded_bitstream = unpermute(encoded_bitstream)
 
     # Decode LDPC
     bitstream = np.array([])
@@ -108,13 +107,12 @@ def get_symbols_from_bitstream(bitstream: np.ndarray, skip_encoding: bool = Fals
         encoded_bitstream = bitstream
     else:
         # Pad until a multiple of CODE.K before doing LDPC
-        bitstream = np.concatenate((bitstream, np.random.randint(2, size=(-len(bitstream)) % CODE.K)))
+        bitstream = np.concatenate((bitstream, np.random.default_rng(42).integers(2, size=(-len(bitstream)) % CODE.K)))
 
         # Encode LDPC
         encoded_bitstream = np.array([])
         for i in range(0, len(bitstream), CODE.K):
             encoded_bitstream = np.concatenate((encoded_bitstream, CODE.encode(bitstream[i:i + CODE.K])))
-        # encoded_bitstream[:] = permute(encoded_bitstream)
 
     # Turn every two bits into a QPSK symbol [1+j, 1-j, -1-j, -1+j]
     encoded_bitstream = np.where(encoded_bitstream == 0, 1, -1)
@@ -195,15 +193,6 @@ def plot_error_per_bin(received: np.ndarray, sent: np.ndarray, filter: np.ndarra
     fig.tight_layout()
     plt.show()
 
-def permute(arr: np.ndarray):
-    perm = np.random.default_rng(seed=42).permutation(len(arr))
-    return arr[perm]
-
-def unpermute(shuffled: np.ndarray):
-    perm = np.random.default_rng(seed=42).permutation(len(shuffled))
-    rev_perm = np.argsort(perm)
-    return shuffled[rev_perm]
-
 def text_to_binary(text: str) -> str:
     return ''.join(format(ord(c), '08b') for c in text)
 
@@ -282,7 +271,7 @@ His legacy shines, year after year.
 # Pad until we have TARGET_FACTOR bits
 TARGET_FACTOR = SYMBOLS_PER_BLOCK * BITS_PER_SYMBOL * INFORMATION_BLOCKS_PER_FRAME // CODE.N * CODE.K
 
-SEND = 0 # 0 for random bits, 1 for text, 2 for file
+SEND = 2 # 0 for random bits, 1 for text, 2 for file
 assert SEND in [0, 1, 2]
 
 DATA = get_non_repeating_bits(FRAMES * TARGET_FACTOR, 69)
@@ -291,7 +280,7 @@ if SEND == 1:
     bin = [int(bit) for bit in bin]
     DATA = np.array(bin)
 elif SEND == 2:
-    DATA = encode_file_to_bits("challenge/output/6.wav")
+    DATA = encode_file_to_bits("Domus.tif")
 
 # Pad until we have TARGET_FACTOR bits
 DATA = np.concatenate((DATA, get_non_repeating_bits((-len(DATA)) % TARGET_FACTOR, 22)))

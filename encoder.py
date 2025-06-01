@@ -9,14 +9,14 @@ def encode(symbols: np.ndarray) -> np.ndarray:
 
     # Pad until a multiple of SYMBOLS_PER_BLOCK
     constellation = [1+1j, 1-1j, -1-1j, -1+1j]
-    paddingSymbols = np.random.choice(constellation, size=(-len(symbols)) % (SYMBOLS_PER_BLOCK * FRAMES))
+    paddingSymbols = np.random.default_rng(41).choice(constellation, size=(-len(symbols)) % (SYMBOLS_PER_BLOCK * FRAMES))
     symbols = np.concatenate((symbols, paddingSymbols)).reshape(-1, SYMBOLS_PER_BLOCK)
 
     # Fill unused frequency bins
     # After that, symbols is a matrix with EFFECTIVE_SYMBOLS_PER_BLOCK columns
-    symbols = np.concatenate((np.random.choice(constellation, size=(symbols.shape[0], HIGH_PASS_INDEX)),
+    symbols = np.concatenate((np.random.default_rng(42).choice(constellation, size=(symbols.shape[0], HIGH_PASS_INDEX)),
                               symbols,
-                              np.random.choice(constellation, size=(symbols.shape[0], EFFECTIVE_SYMBOLS_PER_BLOCK - LOW_PASS_INDEX)),
+                              np.random.default_rng(43).choice(constellation, size=(symbols.shape[0], EFFECTIVE_SYMBOLS_PER_BLOCK - LOW_PASS_INDEX)),
                             ), axis=1)
     
     # Add zeros to the zeroth bin and do conjugate symmetry

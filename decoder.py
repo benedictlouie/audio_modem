@@ -143,7 +143,7 @@ def estimate_ldpc_noise_variance(channel_coefficients: np.ndarray, sigma2):
     return sigmak2[1+HIGH_PASS_INDEX: 1+LOW_PASS_INDEX]
 
 if __name__ == "__main__":
-    # AUDIO_PATH = "received.wav"
+    AUDIO_PATH = "received.wav"
     signal = load_audio_file(AUDIO_PATH)
 
     received_information_blocks, channel_coefficients, filter, noise_var = synchronize(signal)

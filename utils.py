@@ -16,8 +16,8 @@ BLOCK_LENGTH = 2 * (EFFECTIVE_SYMBOLS_PER_BLOCK + 1) + CYCLIC_PREFIX
 N_DFT = BLOCK_LENGTH - CYCLIC_PREFIX
 
 # Cut-offs because of hardware limitation
-LOW_PASS_INDEX = 1985
-HIGH_PASS_INDEX = 41
+LOW_PASS_INDEX = 2044
+HIGH_PASS_INDEX = 100
 
 # Number of symbols after cut-offs
 SYMBOLS_PER_BLOCK = LOW_PASS_INDEX - HIGH_PASS_INDEX
@@ -44,7 +44,7 @@ AUDIO_PATH = "output.wav"
 
 # LDPC Settings
 DECTYPE = 'sumprod2'
-CODE = ldpc.code(z=81)
+CODE = ldpc.code(z=81, rate='5/6')
 
 def load_audio_file(file_path: str) -> np.ndarray:
     with contextlib.redirect_stderr(None):

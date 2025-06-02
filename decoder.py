@@ -155,6 +155,8 @@ if __name__ == "__main__":
 
     plot_error_per_bin(received_symbols, sent_symbols, filter)
 
+    # plot_received(received_symbols)
+
     ldpc_noise_variance = estimate_ldpc_noise_variance(channel_coefficients, noise_var)
     received_data = get_bitstream_from_symbols(received_symbols, ldpc_noise_variance)[:len(DATA)]
 

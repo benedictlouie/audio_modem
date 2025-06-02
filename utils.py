@@ -34,7 +34,7 @@ CHIRP_TIME = 0.5
 CHIRP_LENGTH = round(CHIRP_TIME * SAMPLE_RATE)
 CHIRP_FACTOR = 0.008
 CHIRP_LOW = 0
-CHIRP_HIGH = 5000
+CHIRP_HIGH = 10000
 
 # QPSK
 BITS_PER_SYMBOL = 2
@@ -127,8 +127,11 @@ def plot_sent_received_constellation(sent: np.ndarray, received: np.ndarray) -> 
 
     received = received[:len(sent)]
 
-    # received = np.reshape(received, (-1, SYMBOLS_PER_BLOCK))[:,SYMBOLS_PER_BLOCK*9//10:SYMBOLS_PER_BLOCK].flatten()
-    # sent = np.reshape(sent, (-1, SYMBOLS_PER_BLOCK))[:,SYMBOLS_PER_BLOCK*9//10:SYMBOLS_PER_BLOCK].flatten()
+    # received = np.reshape(received, (-1, SYMBOLS_PER_BLOCK))[:,SYMBOLS_PER_BLOCK*0//10:SYMBOLS_PER_BLOCK*1//10].flatten()
+    # sent = np.reshape(sent, (-1, SYMBOLS_PER_BLOCK))[:,SYMBOLS_PER_BLOCK*0//10:SYMBOLS_PER_BLOCK*1//10].flatten()
+
+    # received = np.reshape(received, (-1, SYMBOLS_PER_BLOCK))[4:8,:].flatten()
+    # sent = np.reshape(sent, (-1, SYMBOLS_PER_BLOCK))[4:8,:].flatten()
 
     unique_symbols = np.unique(sent)
     colors = ['red', 'blue', 'green', 'orange']
@@ -173,6 +176,7 @@ def plot_error_per_bin(received: np.ndarray, sent: np.ndarray, filter: np.ndarra
     received = np.sign(received.real) + 1j * np.sign(received.imag)
     error_rate = np.mean(received != sent, axis=0)
     filter_magnitude = np.abs(np.mean(filter, axis=0))[1: SYMBOLS_PER_BLOCK + 1]
+    received_magnitude = np.abs(np.mean(received, axis=0))
 
     fig, ax1 = plt.subplots(figsize=(12, 6))
 
@@ -186,12 +190,23 @@ def plot_error_per_bin(received: np.ndarray, sent: np.ndarray, filter: np.ndarra
     ax2 = ax1.twinx()
     color = 'tab:orange'
     ax2.plot(np.arange(SYMBOLS_PER_BLOCK), filter_magnitude, color=color, label='Filter Magnitude')
-    ax2.set_ylabel('Filter Magnitude', color=color)
+    # ax2.plot(np.arange(SYMBOLS_PER_BLOCK), received_magnitude, 'r-', label='Received Magnitude')
+    ax2.set_ylabel('Magnitude', color=color)
     ax2.tick_params(axis='y', labelcolor=color)
 
-    plt.title('Error Rate per Bin and Filter Magnitude')
+    plt.title('Error Rate per bin, Filter Magnitude and Received Magnitude')
     fig.tight_layout()
     plt.show()
+
+def plot_received(received: np.ndarray) -> None:
+    received = received[: len(received) // SYMBOLS_PER_BLOCK * SYMBOLS_PER_BLOCK]
+    received = np.reshape(received, (-1, SYMBOLS_PER_BLOCK))
+    received = np.mean(np.abs(received), axis=1)
+    plt.plot(received)
+    plt.xlabel("DFT block")
+    plt.ylabel("Mean magnitude")
+    plt.show()
+
 
 def text_to_binary(text: str) -> str:
     return ''.join(format(ord(c), '08b') for c in text)

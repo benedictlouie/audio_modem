@@ -64,7 +64,7 @@ def get_chirp() -> np.ndarray:
     Generate a chirp signal.
     """
     t = np.linspace(0, CHIRP_TIME, CHIRP_LENGTH)
-    signal = CHIRP_FACTOR * np.sin(2 * np.pi * (CHIRP_LOW + (CHIRP_HIGH - CHIRP_LOW) * t / CHIRP_TIME) * t)
+    signal = CHIRP_FACTOR * np.sin(np.pi * (CHIRP_LOW + (CHIRP_HIGH - CHIRP_LOW) * t / CHIRP_TIME) * t)
     return signal
     
 if __name__ == "__main__":

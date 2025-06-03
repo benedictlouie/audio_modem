@@ -19,10 +19,10 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     startIndex = np.argmax(np.correlate(signal, chirp_signal[::-1]))
     endIndex = np.argmax(np.correlate(signal, chirp_signal))
     
-    known_blocks = get_known_blocks()
-
-    # Variable frame length
-    frameLength = (INFORMATION_BLOCKS_PER_FRAME + 1) * BLOCK_LENGTH
+    # Estimate number of frames
+    num_frames = round((endIndex - startIndex - CHIRP_LENGTH) / ((INFORMATION_BLOCKS_PER_FRAME + 1) * BLOCK_LENGTH))
+    print("There are", num_frames, "frames.")
+    known_blocks = get_known_blocks(num_frames)
     
     # left_bound is the end of the chirp minus one block length
     left_bound = startIndex + CHIRP_LENGTH - BLOCK_LENGTH
@@ -30,14 +30,14 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     # sync for each data block using correlation of each known block
     sync_indices = np.array([])
     current_index = 0
-    while left_bound + frameLength < endIndex:
-        index = int(np.argmax(np.correlate(signal[left_bound:left_bound + frameLength], known_blocks[current_index]))) + left_bound
+    while left_bound + FRAME_LENGTH < endIndex:
+        index = int(np.argmax(np.correlate(signal[left_bound:left_bound + FRAME_LENGTH], known_blocks[current_index]))) + left_bound
         sync_indices = np.append(sync_indices, index)
-        left_bound = index + frameLength - BLOCK_LENGTH
+        left_bound = index + FRAME_LENGTH - BLOCK_LENGTH
         current_index += 1
 
     # indices are the theoretical start indices of each known block - found by adding the frame length to the start index of the first known block
-    indices = np.arange(current_index) * frameLength + startIndex + CHIRP_LENGTH
+    indices = np.arange(current_index) * FRAME_LENGTH + startIndex + CHIRP_LENGTH
 
     # Find the drift gradient by regression of the theoretical indices and the indices found by synchronization.
     # Using m = ∑xy/∑x² with normalised values, we estiate the slope
@@ -47,10 +47,10 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     drift_constant = np.mean(sync_indices) - drift_gradient * np.mean(indices)
 
     # frame_indices is a matrix with frameLength columns, every row contains the corrected sample indices
-    frame_indices = (np.arange(startIndex + CHIRP_LENGTH, startIndex + CHIRP_LENGTH + current_index * frameLength) * drift_gradient + drift_constant).reshape(-1, frameLength)
+    frame_indices = (np.arange(startIndex + CHIRP_LENGTH, startIndex + CHIRP_LENGTH + current_index * FRAME_LENGTH) * drift_gradient + drift_constant).reshape(-1, FRAME_LENGTH)
 
     # extarcted_indices is a matrix of the same shape, but rounding every value to an integer
-    extracted_indices = np.vstack([np.arange(round(row[0]), round(row[0]) + frameLength) for row in frame_indices])
+    extracted_indices = np.vstack([np.arange(round(row[0]), round(row[0]) + FRAME_LENGTH) for row in frame_indices])
     drift = extracted_indices - frame_indices
 
     # Extract relevant blocks we want
@@ -225,28 +225,28 @@ def plot_received(received: np.ndarray) -> None:
     plt.show()
 
 if __name__ == "__main__":
-    # AUDIO_PATH = "received.wav"
-    signal = load_audio_file(AUDIO_PATH)
+    signal = load_audio_file(RECEIVED_AUDIO_PATH)
+    original_bits = get_original_bits(MODE)
 
     received_information_blocks, channel_coefficients, filter, noise_var = synchronize(signal)
     received_symbols = decode(received_information_blocks, filter)
-    sent_symbols = get_symbols_from_bitstream(DATA)
-
-    plot_sent_received_constellation(sent_symbols, received_symbols)
-
-    plot_error_per_bin(received_symbols, sent_symbols, filter)
-
-    # plot_received(received_symbols)
 
     ldpc_noise_variance = estimate_ldpc_noise_variance(channel_coefficients, noise_var)
-    received_data = get_bitstream_from_symbols(received_symbols, ldpc_noise_variance)[:len(DATA)]
+    received_data = get_bitstream_from_symbols(received_symbols, ldpc_noise_variance)
+    
+    if MODE < 3:
+        sent_symbols = get_symbols_from_bitstream(original_bits)
+        plot_sent_received_constellation(sent_symbols, received_symbols)
+        plot_error_per_bin(received_symbols, sent_symbols, filter)
+        # plot_received(received_symbols)
+        received_data = received_data[:len(original_bits)]
+        print(f'Bit Error Rate after LDPC: {np.sum(received_data != original_bits) / len(original_bits) * 100:.2f}%')
 
-    print(f'Bit Error Rate after LDPC: {np.sum(received_data != DATA) / len(DATA) * 100:.2f}%')
-
-    if SEND == 1:
+    # Output decoded data
+    if MODE == 1:
         print("\nDecoded:")
         received_data = ''.join([str(bit) for bit in received_data])
         print(binary_to_text(received_data)[:len(POEM)])
-    elif SEND == 2:
+    if MODE == 2 or MODE == 3:
         decode_bits_to_file(received_data)
-        print("\nFile successfully received and saved.")
+        print("File successfully received and saved.")

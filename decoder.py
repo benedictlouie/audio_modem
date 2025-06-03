@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 from typing import Tuple
 
 from utils import *
@@ -146,7 +147,6 @@ def plot_sent_received_constellation(sent: np.ndarray, received: np.ndarray) -> 
 
     # received = np.reshape(received, (-1, SYMBOLS_PER_BLOCK))[:,SYMBOLS_PER_BLOCK*0//10:SYMBOLS_PER_BLOCK*1//10].flatten()
     # sent = np.reshape(sent, (-1, SYMBOLS_PER_BLOCK))[:,SYMBOLS_PER_BLOCK*0//10:SYMBOLS_PER_BLOCK*1//10].flatten()
-
     # received = np.reshape(received, (-1, SYMBOLS_PER_BLOCK))[4:8,:].flatten()
     # sent = np.reshape(sent, (-1, SYMBOLS_PER_BLOCK))[4:8,:].flatten()
 
@@ -156,26 +156,46 @@ def plot_sent_received_constellation(sent: np.ndarray, received: np.ndarray) -> 
 
     plt.figure(figsize=(8, 8))
 
-    # Received symbols marked as dots
-    for sym in unique_symbols:
-        mask = sent == sym
-        plt.scatter(received[mask].real, received[mask].imag,
-                    color=color_map[sym], alpha=0.1, label=f'Received (Sent: {sym})')
-
-    # Sent symbols marked with an "x"
-    for sym in unique_symbols:
-        plt.plot(sym.real, sym.imag, 'x', markersize=12, markeredgewidth=2,
-                 color=color_map[sym], label=f'Sent: {sym}')
-
-    accuracy = np.mean(sent == np.sign(received.real) + 1j * np.sign(received.imag))
+    if MODE < 3:
+        # Received symbols marked as dots
+        for sym in unique_symbols:
+            mask = sent == sym
+            plt.scatter(received[mask].real, received[mask].imag,
+                        color=color_map[sym], alpha=0.1, label=f'Received')
+        # Sent symbols marked with an "x"
+        for sym in unique_symbols:
+            plt.plot(sym.real, sym.imag, 'x', markersize=12, markeredgewidth=2,
+                    color=color_map[sym], label=f'Sent: {sym}')
+    else:
+        plt.scatter(received.real, received.imag, color='gray', alpha=0.1)
 
     plt.axhline(0, color='black', linewidth=0.5)
     plt.axvline(0, color='black', linewidth=0.5)
     plt.grid(True, linestyle='--', alpha=0.6)
     plt.xlabel('Real')
     plt.ylabel('Imaginary')
-    plt.title(f'Constellation: Sent vs Received. Accuracy: {accuracy:.4f}.')
+
+    # Set title
+    if MODE < 3:
+        accuracy = np.mean(sent == np.sign(received.real) + 1j * np.sign(received.imag))
+        plt.title(f'Constellation: Sent vs Received. Accuracy: {accuracy:.4f}.')
+    else:
+        plt.title(f'Received constellation')
+
     plt.axis('equal')
+
+    # Animation
+    fig, ax = plt.subplots()
+    sc = ax.scatter([], [], color='gray', alpha=0.1)
+    ax.set_xlim(-3, 3)
+    ax.set_ylim(-3, 3)
+    ax.axhline(0, color='black', linewidth=0.5)
+    ax.axvline(0, color='black', linewidth=0.5)
+    def update(frame):
+        sc.set_offsets(np.c_[received[:frame+1].real, received[:frame+1].imag])
+        return sc,
+    ani = FuncAnimation(fig, update, frames=len(received), interval=1, blit=True)
+
     plt.show()
 
 def plot_error_per_bin(received: np.ndarray, sent: np.ndarray, filter: np.ndarray) -> None:
@@ -233,6 +253,9 @@ if __name__ == "__main__":
 
     ldpc_noise_variance = estimate_ldpc_noise_variance(channel_coefficients, noise_var)
     received_data = get_bitstream_from_symbols(received_symbols, ldpc_noise_variance)
+    
+    if MODE == 3:
+        plot_sent_received_constellation(received_symbols, received_symbols)
     
     if MODE < 3:
         sent_symbols = get_symbols_from_bitstream(original_bits)

@@ -1,79 +1,47 @@
 import numpy as np
-from typing import Tuple
 
 from utils import *
 
-# Doing OFDM with every block
-def encode_block(symbols: np.ndarray) -> np.ndarray:
+def write_wav(filename: str, data: np.ndarray, sample_rate: int = SAMPLE_RATE) -> None:
+    data = np.int16(data / np.max(np.abs(data)) * 32767)
+    write(filename, sample_rate, data)
 
-    # Start with one 0, add all the symbols, another 0 then conjugate the symbols
-    symbols = np.concatenate((np.zeros(1), symbols, np.zeros(1), np.conjugate(symbols[::-1])))
+def insert_known_blocks(signal: np.ndarray, num_frames: int) -> np.ndarray:
+    """
+    Insert a synchronization OFDM block before every information block of the signal.
+    """
+    # With varicable frame length
+    known_blocks = get_known_blocks(num_frames)
+    blocks = signal.reshape(-1, BLOCK_LENGTH * INFORMATION_BLOCKS_PER_FRAME)
+    return np.concatenate((known_blocks, blocks), axis=1).flatten()
 
-    # IFFT
-    symbolsInTime = np.fft.ifft(symbols).real
-
-    # Add the cyclic prefix in front
-    return np.concatenate((symbolsInTime[-cyclicPrefix:], symbolsInTime))
-
-# Encode the bitstream
-def encode(bitstream: str, syncBlock: bool=False) -> np.ndarray:
-
-    # Get every bitsPerConstellation bits from the bitstream and turn into constellation
-    symbols = np.array([])
-    for i in range(0, len(bitstream), bitsPerConstellation):
-        symbols = np.append(symbols, constellation[bitstream[i:i+bitsPerConstellation]])
-
-    if not syncBlock:
-        # Repeat symbols and make sure we have syncLength symbols
-        symbols = np.repeat(symbols, repeatCount)
-        symbols = np.concatenate((symbols, np.repeat(constellation['0' * bitsPerConstellation], (-len(symbols)) % syncLength)))       
-
-    # We need this many DFT blocks
-    blockCount = len(symbols) // symbolsPerBlock
-
-    # Initialise an all-zero signal array
-    signal = np.zeros(blockCount * blockLength)
-
-    # For every block, we encode the signal
-    for i in range(blockCount):
-        signal[i * blockLength : (i+1) * blockLength] = encode_block(symbols[i * symbolsPerBlock : (i+1) * symbolsPerBlock])
-
-    return signal
-
-def insert_sync_blocks(signal: np.ndarray) -> np.ndarray:
-
-    startBlock, syncBlock, endBlock = get_sync_blocks()
-    syncLength = syncBlockPeriod * blockLength
-
-    output = np.array([])
-    for i in range(0, len(signal), syncLength):
-        output = np.concatenate((output, signal[i: i + syncLength], syncBlock))
-    output = np.concatenate((np.zeros(sampleRate),
-                             startBlock,
-                             output[:-blockLength], # remove the last sync block
-                             endBlock,
-                             np.zeros(sampleRate)))
-    return output
-
-def get_sync_blocks() -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-
-    bits = get_non_repeating_bits(bitsPerConstellation * symbolsPerBlock * (2 * startEndBlockMultiplier + 1))
-    blocks = encode(bits, syncBlock=True)
-
-    startBlock = 5 * blocks[:blockLength * startEndBlockMultiplier]
-    syncBlock = 3 * blocks[blockLength * startEndBlockMultiplier: blockLength * (startEndBlockMultiplier + 1)]
-    endBlock = 4 * blocks[blockLength * (startEndBlockMultiplier + 1):]
-
-    return startBlock, syncBlock, endBlock
+def insert_chirps(signal: np.ndarray) -> np.ndarray:
+    """
+    Insert a reverse chirp at the beginning and chirp at the end of the signal.
+    """
+    chirp = get_chirp()
+    return np.concatenate((chirp[::-1], signal, chirp))
     
 if __name__ == "__main__":
-    text = "In Cambridge's halls where knowledge flows"
-    data = text_to_binary(text)
-    # data = encode_ldpc(data)
-    signal = encode(data)
-    signal = insert_sync_blocks(signal)
-    write_wav(audio_path, signal)
 
-    print(f'Bitrate: {round(len(data) * sampleRate / (len(signal) - 2 * sampleRate))} bps')
-    print(f'Bitstream: {len(data)} bits')
-    print(f'Time: {(len(signal) / sampleRate - 2):.2f} seconds')
+    assert MODE in [0, 1, 2]
+    original_bits = get_original_bits(MODE)
+
+    symbols = get_symbols_from_bitstream(original_bits)
+    signal = encode(symbols)
+
+    # Calculate number of frames
+    assert len(signal) % (BLOCK_LENGTH * INFORMATION_BLOCKS_PER_FRAME) == 0
+    num_frames = len(signal) // (BLOCK_LENGTH * INFORMATION_BLOCKS_PER_FRAME)
+    print("There are", num_frames, "frames.")
+
+    signal = insert_known_blocks(signal, num_frames)
+    signal = insert_chirps(signal)
+
+    print(f'Bitrate: {round(len(original_bits) * SAMPLE_RATE / len(signal))} bps')
+    print(f'Bitstream: {len(original_bits)} bits')
+    print(f'Time: {(len(signal) / SAMPLE_RATE):.2f} seconds')
+
+    # Insert one second of nothing before and after the signal
+    signal = np.concatenate((np.zeros(SAMPLE_RATE), signal, np.zeros(SAMPLE_RATE)))
+    write_wav(AUDIO_PATH, signal)

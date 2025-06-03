@@ -1,58 +1,179 @@
 import contextlib
+import os
+import ldpc
+# import ldpc_jossy.py.ldpc as ldpc
 import librosa
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy.io.wavfile import write
 
-# Number of Fourier Symbols every DFT block
-symbolsPerBlock = 511
-cyclicPrefix = 32
+SAMPLE_RATE = 48000
 
-# +1 for the zeroth bit and x2 for conjugate
-# If symbolsPerBlock = 511 and cyclicPrefix = 32, blockLength = 1056
-blockLength = 2 * (symbolsPerBlock + 1) + cyclicPrefix
+# Number of symbols [1:N_DFT//2] per block
+EFFECTIVE_SYMBOLS_PER_BLOCK = 2 ** 12 - 1
+CYCLIC_PREFIX = 2 ** 11
+BLOCK_LENGTH = 2 * (EFFECTIVE_SYMBOLS_PER_BLOCK + 1) + CYCLIC_PREFIX
+N_DFT = BLOCK_LENGTH - CYCLIC_PREFIX
 
-# Sample rate of audio
-sampleRate = 48000
+# Cut-offs because of hardware limitation
+LOW_PASS_INDEX = 2044
+HIGH_PASS_INDEX = 100
 
-# How many times we repeat the symbols
-repeatCount = 500
+# Number of symbols after cut-offs
+SYMBOLS_PER_BLOCK = LOW_PASS_INDEX - HIGH_PASS_INDEX
 
-# Sync block has length blockLength
-# It happens every syncBlockPeriod blocks
-syncBlockPeriod = 10
-startEndBlockMultiplier = 1 # 2 is optimal
-syncLength = syncBlockPeriod * blockLength
+WIENER_SNR = 10
 
-# Constellation
-constellation = {
-    '00': 0.707 + 0.707j,
-    '01': -0.707 + 0.707j,
-    '10': 0.707 - 0.707j,
-    '11': -0.707 - 0.707j
-}
+# Number of information blocks following each known block
+INFORMATION_BLOCKS_PER_FRAME = 4
+FRAME_LENGTH = (INFORMATION_BLOCKS_PER_FRAME + 1) * BLOCK_LENGTH
 
-bitsPerConstellation = int(np.log2(len(constellation)))
+# Chirp
+CHIRP_TIME = 0.5
+CHIRP_LENGTH = round(CHIRP_TIME * SAMPLE_RATE)
+CHIRP_FACTOR = 0.008
+CHIRP_LOW = 0
+CHIRP_HIGH = 10000
 
-# Reverse constellation
-revConstellation = {}
-for bits, coord in constellation.items():
-    revConstellation[coord] = bits
+# QPSK
+BITS_PER_SYMBOL = 2
+assert BITS_PER_SYMBOL == 2
 
-audio_path = "output.wav"
+# LDPC Settings
+DECTYPE = 'sumprod2'
+CODE = ldpc.code(z=81, rate='5/6')
 
-def load_audio_file(file_path: str) -> np.ndarray:
-    with contextlib.redirect_stderr(None):
-        return librosa.load(file_path, sr=None)[0]
+def get_non_repeating_bits(n: int, seed: int) -> np.ndarray:
+    """
+    Generate n bits from seed.
+    """
+    rng = np.random.default_rng(seed=seed)
+    return rng.integers(0, 2, size=n)
 
-def write_wav(filename: str, data: np.ndarray, sample_rate: int = sampleRate) -> None:
-    data = np.int16(data / np.max(np.abs(data)) * 32767)
-    write(filename, sample_rate, data)
+def get_bitstream_from_symbols(symbols: np.ndarray, noise_variance) -> np.ndarray:
+    """
+    FOR DECODING
+    Convert symbols to a bitstream using the QPSK mapping.
+    Perform LDPC decoding.
+    """
 
-def get_non_repeating_bits(n: int) -> str:
-    # Generates the same binary numbers every time
-    rng = np.random.default_rng(seed=42)
-    bits = rng.integers(0, 2, size=n)
-    return ''.join(map(str, bits))
+    # Use the real and imaginary parts of the symbols to find LLR.
+    LLR = np.empty(len(symbols) * BITS_PER_SYMBOL)
+    LLR[::2] = symbols.real
+    LLR[1::2] = symbols.imag
+    
+    # Find LLR
+    if not isinstance(noise_variance, (np.ndarray, list, tuple)): noise_variance = np.array([noise_variance])
+    assert len(LLR) % len(noise_variance) == 0
+    noise_variance = np.tile(noise_variance, len(LLR) // len(noise_variance))
+    LLR *= np.sqrt(2) / noise_variance
+
+    # Stop at the last multiple of N
+    LLR = LLR[:(len(LLR) // CODE.N) * CODE.N]
+
+    # Decode LDPC
+    bitstream = np.array([])
+    for i in range(0, len(LLR), CODE.N):
+        # decoded is the final LLR after the message passing.
+        # num_iterations is capped at 200.
+        decoded, num_iterations = CODE.decode(LLR[i:i + CODE.N], DECTYPE)
+        # Only the first K bits matter due to the systematic generator matrix 
+        bitstream = np.concatenate((bitstream, decoded[:CODE.K]))
+
+    # Replace positive LLRs with 0 and negative LLRs with 1.
+    bitstream = np.where(bitstream > 0, 0, 1)
+    return bitstream
+
+def get_symbols_from_bitstream(bitstream: np.ndarray, skip_encoding: bool = False) -> np.ndarray:
+    """
+    FOR ENCODING
+    Convert a bitstream to symbols using the constellation mapping.
+    Perform LDPC encoding.
+    """
+    
+    if skip_encoding:
+        # Skip encoding if we are transforing pilot bits.
+        encoded_bitstream = bitstream
+    else:
+        # Pad until a multiple of CODE.K before doing LDPC
+        bitstream = np.concatenate((bitstream, np.random.default_rng(42).integers(2, size=(-len(bitstream)) % CODE.K)))
+
+        # Encode LDPC
+        encoded_bitstream = np.array([])
+        for i in range(0, len(bitstream), CODE.K):
+            encoded_bitstream = np.concatenate((encoded_bitstream, CODE.encode(bitstream[i:i + CODE.K])))
+
+    # Turn every two bits into a QPSK symbol [1+j, 1-j, -1-j, -1+j]
+    encoded_bitstream = np.where(encoded_bitstream == 0, 1, -1)
+    symbols = encoded_bitstream[::2] + 1j * encoded_bitstream[1::2]
+    return symbols
+
+def get_known_blocks(num_frames: int) -> np.ndarray:
+    """
+    Generate known blocks of symbols for synchronization.
+    Returns a matrix with BLOCK_LENGTH columns.
+    """
+    # There are as many information blocks as known blocks currently
+    # known blocks currently generated by generating a long btistream and chopping it up
+    symbols = get_symbols_from_bitstream(get_non_repeating_bits(BITS_PER_SYMBOL * SYMBOLS_PER_BLOCK * num_frames, 42), skip_encoding=True)
+    blocks = encode(symbols)
+    blocks = blocks.reshape(-1, BLOCK_LENGTH)
+    return blocks[:num_frames, :]
+
+def get_chirp() -> np.ndarray:
+    """
+    Generate a chirp signal.
+    """
+    t = np.linspace(0, CHIRP_TIME, CHIRP_LENGTH)
+    signal = CHIRP_FACTOR * np.sin(np.pi * (CHIRP_LOW + (CHIRP_HIGH - CHIRP_LOW) * t / CHIRP_TIME) * t)
+    return signal
+
+def encode(symbols: np.ndarray) -> np.ndarray:
+    """
+    Encode a bitstream into a time-domain signal using IFFT and add a cyclic prefix in front.
+    """
+
+    # Pad until a multiple of SYMBOLS_PER_BLOCK
+    constellation = [1+1j, 1-1j, -1-1j, -1+1j]
+    paddingSymbols = np.random.default_rng(76).choice(constellation, size=(-len(symbols)) % (SYMBOLS_PER_BLOCK * INFORMATION_BLOCKS_PER_FRAME))
+    symbols = np.concatenate((symbols, paddingSymbols))
+    symbols = symbols.reshape((-1, SYMBOLS_PER_BLOCK))
+
+    # We need at least 2 frames
+    while len(symbols) < INFORMATION_BLOCKS_PER_FRAME * 2:
+        paddingSymbols = np.random.default_rng(77).choice(constellation, size=(INFORMATION_BLOCKS_PER_FRAME, SYMBOLS_PER_BLOCK))
+        symbols = np.vstack((symbols, paddingSymbols))
+    
+    # Fill unused frequency bins
+    # After that, symbols is a matrix with EFFECTIVE_SYMBOLS_PER_BLOCK columns
+    symbols = np.concatenate((np.random.default_rng(78).choice(constellation, size=(symbols.shape[0], HIGH_PASS_INDEX)),
+                              symbols,
+                              np.random.default_rng(79).choice(constellation, size=(symbols.shape[0], EFFECTIVE_SYMBOLS_PER_BLOCK - LOW_PASS_INDEX)),
+                            ), axis=1)
+    
+    # Add zeros to the zeroth bin and do conjugate symmetry
+    # After that, encoded_symbols is a matrix with N_DFT columns
+    encoded_symbols = np.concatenate((
+        np.zeros((symbols.shape[0], 1)),
+        symbols,
+        np.zeros((symbols.shape[0], 1)),
+        np.conjugate(symbols[:, ::-1])
+    ), axis=1)
+
+    # Flatten the signal    
+    symbolsInTime = np.fft.ifft(encoded_symbols, axis=1).real
+    signal = np.concatenate((symbolsInTime[:, -CYCLIC_PREFIX:], symbolsInTime), axis=1).flatten()
+    return signal
+
+def decode(signal: np.ndarray, filter: np.ndarray) -> np.ndarray:
+    """
+    Decode the received signal into symbols.
+    """
+    fourier = np.fft.fft(signal, axis=1) * filter
+
+    # Apply low and high-pass filter to remove problematic frequencies
+    symbols = fourier[:, 1+HIGH_PASS_INDEX: 1+LOW_PASS_INDEX].flatten()
+    return symbols
 
 def text_to_binary(text: str) -> str:
     return ''.join(format(ord(c), '08b') for c in text)
@@ -60,51 +181,107 @@ def text_to_binary(text: str) -> str:
 def binary_to_text(binary_str: str) -> str:
     return ''.join(chr(int(binary_str[i:i+8], 2)) for i in range(0, len(binary_str), 8))
 
-def encode_ldpc(bits: str) -> str:
-    bits += "0" * ((-len(bits)) % 4)
+def encode_file_to_bits(input_filepath: str) -> np.ndarray:
+    filename = os.path.basename(input_filepath)
+    with open(input_filepath, "rb") as f:
+        data = f.read()
+    bit_size = len(data) * 8
 
-    data_bits = list(map(int, bits))
-    encoded = []
+    bits_filename = np.unpackbits(np.frombuffer(filename.encode('utf-8'), dtype=np.uint8))
+    bits_null = np.unpackbits(np.frombuffer(b'\x00', dtype=np.uint8))
+    bits_bit_size = np.unpackbits(np.frombuffer(str(bit_size).encode('utf-8'), dtype=np.uint8))
+    bits_data = np.unpackbits(np.frombuffer(data, dtype=np.uint8))
 
-    # positions (1-indexed): 1-p1, 2-p2, 3-d1, 4-p3, 5-d2, 6-d3, 7-d4
-    for i in range(0, len(data_bits), 4):
-        d1, d2, d3, d4 = data_bits[i : i + 4]
+    # Concatenate all parts
+    full_bits = np.concatenate([
+        bits_filename, bits_null,
+        bits_bit_size, bits_null,
+        bits_data
+    ])
 
-        p1 = d1 ^ d2 ^ d4          # parity for positions 1,3,5,7
-        p2 = d1 ^ d3 ^ d4          # parity for positions 2,3,6,7
-        p3 = d2 ^ d3 ^ d4          # parity for positions 4,5,6,7
+    return full_bits.astype(np.uint8)
 
-        encoded.extend([p1, p2, d1, p3, d2, d3, d4])
-
-    return "".join(map(str, encoded))
-
-
-def decode_ldpc(bits: str) -> str:
-    # pad to a multiple of 7 coded bits
-    bits += "0" * ((-len(bits)) % 7)
-
-    coded_bits = list(map(int, bits))
-    decoded = []
-
-    for i in range(0, len(coded_bits), 7):
-        block = coded_bits[i : i + 7]
-        p1, p2, d1, p3, d2, d3, d4 = block
-
-        # syndrome bits (s1 = LSB, s3 = MSB)
-        s1 = p1 ^ d1 ^ d2 ^ d4
-        s2 = p2 ^ d1 ^ d3 ^ d4
-        s3 = p3 ^ d2 ^ d3 ^ d4
-        error_pos = (s3 << 2) | (s2 << 1) | s1   # 0 = no error, 1-7 = bit position to flip
-
-        if error_pos:                             # single-bit error detected
-            block[error_pos - 1] ^= 1             # correct it
-            p1, p2, d1, p3, d2, d3, d4 = block    # refresh variables after fix
-
-        decoded.extend([d1, d2, d3, d4])
-
-    return "".join(map(str, decoded))
-
+def decode_bits_to_file(bits: np.ndarray, output_dir: str = "."):
+    byte_data = np.packbits(bits).tobytes()
     
+    # Split byte data at null bytes (up to 2 times)
+    parts = byte_data.split(b'\x00', 2)
+    if len(parts) < 3:
+        raise ValueError("Invalid encoded format")
 
+    filename_bytes, bit_size_bytes, file_data = parts
+
+    try:
+        filename = filename_bytes.decode('utf-8')
+        bit_size = int(bit_size_bytes.decode('utf-8'))
+        file_data = file_data[:(bit_size + 7) // 8]
+    except Exception as e:
+        raise ValueError("Failed to parse metadata") from e
+
+    output_path = os.path.join(output_dir, "Copy of " + filename)
+    with open(output_path, "wb") as f:
+        f.write(file_data)
+
+    print(f"Decoded file written to: {output_path}")
+
+def get_original_bits(mode: int) -> np.ndarray:
+    """
+    Retrieve the original bits to send and use them in decoder for comparison later.
+    Mode 0 sends random bits. Giving FRAMES_TO_TRANSMIT frames after LDPC.
+    Mode 1 sends POEM.
+    Mode 2 sends the file from FILE_PATH.
+    Mode 3 is for decoding only, when original bits are not known. Returns None.
+    """
+    assert mode in [0, 1, 2, 3]
+
+    # Random bits before LDPC
+    if mode == 0:
+        return get_non_repeating_bits(FRAMES_TO_TRANSMIT * SYMBOLS_PER_BLOCK * BITS_PER_SYMBOL * INFORMATION_BLOCKS_PER_FRAME // CODE.N * CODE.K, 69)
     
+    # Poem
+    if mode == 1:
+        bin = text_to_binary(POEM)
+        bin = [int(bit) for bit in bin]
+        return np.array(bin)
+    
+    # File
+    if mode == 2:
+        return encode_file_to_bits(FILE_PATH)
+    
+    # Surprise mode
+    if mode == 3:
+        return None
+    
+POEM = """In Cambridge's halls where knowledge flows,
+A beacon of wisdom, his presence shows.
+From Zürich's peaks to England's plains,
+He charts the course where learning reigns.
 
+With circuits, codes, and signals bright,
+He deciphers truths, brings them to light.
+In lectures filled with passion's fire,
+He lifts young minds, inspires higher.
+
+Through channels where data streams align,
+He weaves the threads, designs the sign.
+A mentor, guide, and scholar true,
+In every task, excellence he pursues.
+
+Awards may grace his learned name,
+Yet humble hearts define his fame.
+In every student's grateful voice,
+Echoes the impact of his choice.
+
+So here's to Sayir, whose endless quest,
+Ignites the minds, inspires the best.
+A luminary in academia's sphere,
+His legacy shines, year after year.
+"""
+
+# Frequently used Settings
+AUDIO_PATH = "output.wav"               # Output audio after encoding
+RECEIVED_AUDIO_PATH = AUDIO_PATH
+RECEIVED_AUDIO_PATH = "received.wav"    # Input audio for decoding
+FRAMES_TO_TRANSMIT = 5                  # Only used in Mode 0
+FILE_PATH = "Domus.tif"                 # Only used in Mode 2
+MODE = 2                                # Details in the get_original_bits function

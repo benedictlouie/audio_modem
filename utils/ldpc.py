@@ -463,7 +463,7 @@ class code:
         vdeg = self.vdeg
         cdeg = self.cdeg
         intrlv = self.intrlv
-        c_ldpc = ct.CDLL('c_ldpc.so')
+        c_ldpc = ct.CDLL('utils/c_ldpc.so')
         # preliminary consistency checks
         if len(ch) != len(vdeg):
             raise NameError('Channel inputs not consistent with variable degrees')

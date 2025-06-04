@@ -1,10 +1,44 @@
 import numpy as np
 
-from utils import *
+from utils.utils import *
+from utils.parameters import *
 
-def write_wav(filename: str, data: np.ndarray, sample_rate: int = SAMPLE_RATE) -> None:
-    data = np.int16(data / np.max(np.abs(data)) * 32767)
-    write(filename, sample_rate, data)
+def encode(symbols: np.ndarray) -> np.ndarray:
+    """
+    Encode a bitstream into a time-domain signal using IFFT and add a cyclic prefix in front.
+    """
+
+    # Pad until a multiple of SYMBOLS_PER_BLOCK
+    constellation = [1+1j, 1-1j, -1-1j, -1+1j]
+    paddingSymbols = np.random.default_rng(76).choice(constellation, size=(-len(symbols)) % (SYMBOLS_PER_BLOCK * INFORMATION_BLOCKS_PER_FRAME))
+    symbols = np.concatenate((symbols, paddingSymbols))
+    symbols = symbols.reshape((-1, SYMBOLS_PER_BLOCK))
+
+    # We need at least 2 frames
+    while len(symbols) < INFORMATION_BLOCKS_PER_FRAME * 2:
+        paddingSymbols = np.random.default_rng(77).choice(constellation, size=(INFORMATION_BLOCKS_PER_FRAME, SYMBOLS_PER_BLOCK))
+        symbols = np.vstack((symbols, paddingSymbols))
+    
+    # Fill unused frequency bins
+    # After that, symbols is a matrix with EFFECTIVE_SYMBOLS_PER_BLOCK columns
+    symbols = np.concatenate((np.random.default_rng(78).choice(constellation, size=(symbols.shape[0], HIGH_PASS_INDEX)),
+                              symbols,
+                              np.random.default_rng(79).choice(constellation, size=(symbols.shape[0], EFFECTIVE_SYMBOLS_PER_BLOCK - LOW_PASS_INDEX)),
+                            ), axis=1)
+    
+    # Add zeros to the zeroth bin and do conjugate symmetry
+    # After that, encoded_symbols is a matrix with N_DFT columns
+    encoded_symbols = np.concatenate((
+        np.zeros((symbols.shape[0], 1)),
+        symbols,
+        np.zeros((symbols.shape[0], 1)),
+        np.conjugate(symbols[:, ::-1])
+    ), axis=1)
+
+    # Flatten the signal    
+    symbolsInTime = np.fft.ifft(encoded_symbols, axis=1).real
+    signal = np.concatenate((symbolsInTime[:, -CYCLIC_PREFIX:], symbolsInTime), axis=1).flatten()
+    return signal
 
 def insert_known_blocks(signal: np.ndarray, num_frames: int) -> np.ndarray:
     """

@@ -6,7 +6,7 @@ RECEIVED_AUDIO_PATH = AUDIO_PATH
 RECEIVED_AUDIO_PATH = "received.wav"    # Input audio for decoding
 FRAMES_TO_TRANSMIT = 5                  # Only used in Mode 0
 FILE_PATH = "files/Domus.tif"                 # Only used in Mode 2
-MODE = 3                                # Details in the get_original_bits function
+MODE = 2                                # Details in the get_original_bits function
 
 SAMPLE_RATE = 48000
 
@@ -42,7 +42,7 @@ assert BITS_PER_SYMBOL == 2
 
 # LDPC Settings
 DECTYPE = 'sumprod2'
-CODE = ldpc.code(z=81, rate='5/6')
+CODE = ldpc.code(z=81, rate='1/2')
 
 POEM = """In Cambridge's halls where knowledge flows,
 A beacon of wisdom, his presence shows.

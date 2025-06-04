@@ -19,9 +19,6 @@ def open_file_with_default_app(filepath):
     else:  # Linux and other Unix-like systems
         subprocess.run(['xdg-open', filepath])
 
-# Example usage
-open_file_with_default_app('example.pdf')  # Replace with your file path
-
 def record_until_enter(samplerate=48000, channels=1):
     print("Recording... Press Enter to stop.")
     recording = []

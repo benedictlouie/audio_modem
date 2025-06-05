@@ -23,7 +23,7 @@ def plot_sent_received_constellation(sent: np.ndarray, received: np.ndarray) -> 
 
     plt.figure(figsize=(8, 8))
 
-    if MODE < 3:
+    if KNOWN_RECEIVER:
         # Received symbols marked as dots
         for sym in unique_symbols:
             mask = sent == sym
@@ -43,7 +43,7 @@ def plot_sent_received_constellation(sent: np.ndarray, received: np.ndarray) -> 
     plt.ylabel('Imaginary')
 
     # Set title
-    if MODE < 3:
+    if KNOWN_RECEIVER:
         accuracy = np.mean(sent == np.sign(received.real) + 1j * np.sign(received.imag))
         plt.title(f'Constellation: Sent vs Received. Accuracy: {accuracy:.4f}.')
     else:
@@ -110,3 +110,6 @@ def plot_received(received: np.ndarray) -> None:
     plt.xlabel("DFT block")
     plt.ylabel("Mean magnitude")
     plt.show()
+
+def plot_received_constellation(received: np.ndarray) -> None:
+    plot_sent_received_constellation(received, received)

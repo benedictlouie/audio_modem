@@ -2,9 +2,7 @@ import os
 import librosa
 import numpy as np
 from scipy.io.wavfile import write
-from scipy.signal import chirp
 
-from encoder import encode
 from utils.parameters import *
 
 def load_audio_file(file_path: str) -> np.ndarray:
@@ -162,30 +160,5 @@ def decode_bits_to_file(bits: np.ndarray, output_dir: str = "."):
     print(f"Decoded file written to: {output_path}")
     return output_path
 
-def get_original_bits(mode: int) -> np.ndarray:
-    """
-    Retrieve the original bits to send and use them in decoder for comparison later.
-    Mode 0 sends random bits. Giving FRAMES_TO_TRANSMIT frames after LDPC.
-    Mode 1 sends POEM.
-    Mode 2 sends the file from FILE_PATH.
-    Mode 3 is for decoding only, when original bits are not known. Returns None.
-    """
-    assert mode in [0, 1, 2, 3]
-
-    # Random bits before LDPC
-    if mode == 0:
-        return get_non_repeating_bits(FRAMES_TO_TRANSMIT * SYMBOLS_PER_BLOCK * BITS_PER_SYMBOL * INFORMATION_BLOCKS_PER_FRAME // CODE.N * CODE.K, 69)
-    
-    # Poem
-    if mode == 1:
-        bin = text_to_binary(POEM)
-        bin = [int(bit) for bit in bin]
-        return np.array(bin)
-    
-    # File
-    if mode == 2:
-        return encode_file_to_bits(FILE_PATH)
-    
-    # Surprise mode
-    if mode == 3:
-        return None
+def get_original_bits() -> np.ndarray:
+    return encode_file_to_bits(FILE_PATH)

@@ -17,8 +17,8 @@ BLOCK_LENGTH = 2 * (EFFECTIVE_SYMBOLS_PER_BLOCK + 1) + CYCLIC_PREFIX
 N_DFT = BLOCK_LENGTH - CYCLIC_PREFIX
 
 # Cut-offs because of hardware limitation
-LOW_PASS_INDEX = 2044
-HIGH_PASS_INDEX = 100
+LOW_PASS_INDEX = 2143
+HIGH_PASS_INDEX = 199
 
 # Number of symbols after cut-offs
 SYMBOLS_PER_BLOCK = LOW_PASS_INDEX - HIGH_PASS_INDEX
@@ -30,10 +30,10 @@ INFORMATION_BLOCKS_PER_FRAME = 4
 FRAME_LENGTH = (INFORMATION_BLOCKS_PER_FRAME + 1) * BLOCK_LENGTH
 
 # Chirp
-CHIRP_TIME = 0.5
+CHIRP_TIME = 0.1
 CHIRP_LENGTH = round(CHIRP_TIME * SAMPLE_RATE)
-CHIRP_FACTOR = 0.04
-CHIRP_LOW = 0
+CHIRP_FACTOR = 0.23 # FOUND BY TESTING DO NOT CHANGE
+CHIRP_LOW = 1
 CHIRP_HIGH = 10000
 
 # QPSK
@@ -42,7 +42,7 @@ assert BITS_PER_SYMBOL == 2
 
 # LDPC Settings
 DECTYPE = 'sumprod2'
-CODE = ldpc.code(z=81, rate='1/2')
+CODE = ldpc.code(z=81, rate='5/6')
 
 POEM = """In Cambridge's halls where knowledge flows,
 A beacon of wisdom, his presence shows.

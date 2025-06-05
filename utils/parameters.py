@@ -3,7 +3,7 @@ import utils.ldpc as ldpc
 # Frequently used Settings
 AUDIO_PATH = "output.wav"               # Output audio after encoding
 RECEIVED_AUDIO_PATH = AUDIO_PATH
-RECEIVED_AUDIO_PATH = "received.wav"    # Input audio for decoding
+# RECEIVED_AUDIO_PATH = "received.wav"    # Input audio for decoding
 FRAMES_TO_TRANSMIT = 5                  # Only used in Mode 0
 FILE_PATH = "files/Domus.tif"                 # Only used in Mode 2
 MODE = 2                                # Details in the get_original_bits function
@@ -23,8 +23,6 @@ HIGH_PASS_INDEX = 199
 # Number of symbols after cut-offs
 SYMBOLS_PER_BLOCK = LOW_PASS_INDEX - HIGH_PASS_INDEX
 
-WIENER_SNR = 10
-
 # Number of information blocks following each known block
 INFORMATION_BLOCKS_PER_FRAME = 4
 FRAME_LENGTH = (INFORMATION_BLOCKS_PER_FRAME + 1) * BLOCK_LENGTH
@@ -33,9 +31,8 @@ FRAME_LENGTH = (INFORMATION_BLOCKS_PER_FRAME + 1) * BLOCK_LENGTH
 CHIRP_TIME = 0.5
 CHIRP_LENGTH = round(CHIRP_TIME * SAMPLE_RATE)
 CHIRP_FACTOR = 0.23 # FOUND BY TESTING DO NOT CHANGE
-CHIRP_LOW = 1
-CHIRP_HIGH = 10000
-CHIRP_TYPE = 'logarithmic'
+CHIRP_LOW = 0
+CHIRP_HIGH = 3000
 
 # QPSK
 BITS_PER_SYMBOL = 2

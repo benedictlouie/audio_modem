@@ -8,6 +8,7 @@ import threading
 
 from utils.utils import write_wav
 from utils.parameters import *
+from utils.plot import plot_sent_received_constellation
 from decoder import synchronize, decode, estimate_ldpc_noise_variance, get_bitstream_from_symbols, decode_bits_to_file
 
 
@@ -51,6 +52,9 @@ if __name__ == "__main__":
 
     received_information_blocks, channel_coefficients, filter, noise_var = synchronize(signal)
     received_symbols = decode(received_information_blocks, filter)
+
+    plot_sent_received_constellation(received_symbols, received_symbols)
+
     ldpc_noise_variance = estimate_ldpc_noise_variance(channel_coefficients, noise_var)
     received_data = get_bitstream_from_symbols(received_symbols, ldpc_noise_variance)
     path = decode_bits_to_file(received_data)

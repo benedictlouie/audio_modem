@@ -59,9 +59,9 @@ def plot_sent_received_constellation(sent: np.ndarray, received: np.ndarray) -> 
     ax.axhline(0, color='black', linewidth=0.5)
     ax.axvline(0, color='black', linewidth=0.5)
     def update(frame):
-        sc.set_offsets(np.c_[received[:frame+1].real, received[:frame+1].imag])
+        sc.set_offsets(np.c_[received[:frame * BLOCK_LENGTH].real, received[:frame * BLOCK_LENGTH].imag])
         return sc,
-    ani = FuncAnimation(fig, update, frames=len(received), interval=1, blit=True)
+    ani = FuncAnimation(fig, update, frames=len(received) // BLOCK_LENGTH, interval=1, blit=True)
 
     plt.show()
 

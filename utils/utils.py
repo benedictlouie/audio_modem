@@ -96,7 +96,7 @@ def get_chirp() -> np.ndarray:
     Generate a chirp signal.
     """
     t = np.linspace(0, CHIRP_TIME, CHIRP_LENGTH)
-    signal = CHIRP_FACTOR * chirp(t, f0=CHIRP_LOW, f1=CHIRP_HIGH, t1=CHIRP_TIME, method='logarithmic')
+    signal = CHIRP_FACTOR * np.sin(np.pi * (CHIRP_LOW + (CHIRP_HIGH - CHIRP_LOW) * t / CHIRP_TIME) * t)
     return signal
 
 def text_to_binary(text: str) -> str:

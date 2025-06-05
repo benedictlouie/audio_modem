@@ -58,8 +58,7 @@ def insert_chirps(signal: np.ndarray) -> np.ndarray:
     
 if __name__ == "__main__":
 
-    assert MODE in [0, 1, 2]
-    original_bits = get_original_bits(MODE)
+    original_bits = get_original_bits()
 
     symbols = get_symbols_from_bitstream(original_bits)
     signal = encode(symbols)

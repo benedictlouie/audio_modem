@@ -145,30 +145,21 @@ def estimate_ldpc_noise_variance(channel_coefficients: np.ndarray, sigma2):
 
 if __name__ == "__main__":
     signal = load_audio_file(RECEIVED_AUDIO_PATH)
-    original_bits = get_original_bits(MODE)
 
     received_information_blocks, channel_coefficients, filter, noise_var = synchronize(signal)
     received_symbols = decode(received_information_blocks, filter)
 
     ldpc_noise_variance = estimate_ldpc_noise_variance(channel_coefficients, noise_var)
     received_data = get_bitstream_from_symbols(received_symbols, ldpc_noise_variance)
-    
-    if MODE == 3:
-        plot_sent_received_constellation(received_symbols, received_symbols)
-    
-    if MODE < 3:
+
+    if KNOWN_RECEIVER:
+        original_bits = get_original_bits()
         sent_symbols = get_symbols_from_bitstream(original_bits)
         plot_sent_received_constellation(sent_symbols, received_symbols)
         plot_error_per_bin(received_symbols, sent_symbols, filter)
-        # plot_received(received_symbols)
         received_data = received_data[:len(original_bits)]
         print(f'Bit Error Rate after LDPC: {np.sum(received_data != original_bits) / len(original_bits) * 100:.2f}%')
+    else:
+        plot_received_constellation(received_symbols)
 
-    # Output decoded data
-    if MODE == 1:
-        print("\nDecoded:")
-        received_data = ''.join([str(bit) for bit in received_data])
-        print(binary_to_text(received_data)[:len(POEM)])
-    if MODE == 2 or MODE == 3:
-        decode_bits_to_file(received_data)
-        print("File successfully received and saved.")
+    path = decode_bits_to_file(received_data)

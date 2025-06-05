@@ -38,7 +38,8 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     sync_indices = np.array([])
     current_index = 0
     while left_bound + FRAME_LENGTH < endIndex:
-        index = int(np.argmax(np.correlate(signal[left_bound:left_bound + FRAME_LENGTH], known_blocks[current_index]))) + left_bound
+        correlation = np.correlate(signal[left_bound:left_bound + FRAME_LENGTH], known_blocks[current_index][CYCLIC_PREFIX:])
+        index = int(np.argmax(correlation)) - CYCLIC_PREFIX + left_bound
         sync_indices = np.append(sync_indices, index)
         left_bound = index + FRAME_LENGTH - BLOCK_LENGTH
         current_index += 1

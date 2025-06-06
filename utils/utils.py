@@ -54,7 +54,7 @@ def get_bitstream_from_symbols(symbols: np.ndarray, noise_variance) -> np.ndarra
     print(f"LDPC decoding finished with {num_max_iter} max iterations.")
     # Replace positive LLRs with 0 and negative LLRs with 1.
     bitstream = np.where(bitstream > 0, 0, 1)
-    return bitstream
+    return bitstream, num_max_iter
 
 def get_symbols_from_bitstream(bitstream: np.ndarray, skip_encoding: bool = False) -> np.ndarray:
     """

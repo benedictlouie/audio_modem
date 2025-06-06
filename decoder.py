@@ -124,6 +124,11 @@ def estimate_filter(channel_coefficient_estimate: np.ndarray, information_block_
     Returns a filter matrix with N_DFT columns and repeated rows.
     """
 
+    # Moving average
+    # radius = 1
+    # for i in range(len(channel_coefficient_estimate)):
+    #     channel_coefficient_estimate[i, :] = np.mean(channel_coefficient_estimate[max(0, i-radius): i+radius+1, :], axis=0)
+
     # MMSE (Wiener) filter formula
     filter = np.conjugate(channel_coefficient_estimate) / (np.abs(channel_coefficient_estimate) ** 2 + 1 / snr)
 

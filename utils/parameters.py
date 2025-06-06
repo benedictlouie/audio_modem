@@ -4,8 +4,10 @@ import utils.ldpc as ldpc
 AUDIO_PATH = "output.wav"               # Output audio after encoding
 RECEIVED_AUDIO_PATH = AUDIO_PATH
 RECEIVED_AUDIO_PATH = "received.wav"    # Input audio for decoding
-FILE_PATH = "files/Domus.tif"
+FILE_PATH = "files/caca.tiff"
 KNOWN_RECEIVER = False
+SHIFT_BACK = 3
+SYNCHRONIZATION_LENGTH = 2**10
 
 SAMPLE_RATE = 48000
 
@@ -39,4 +41,4 @@ assert BITS_PER_SYMBOL == 2
 
 # LDPC Settings
 DECTYPE = 'sumprod2'
-CODE = ldpc.code(z=81, rate='1/2')
+CODE = ldpc.code(z=81, rate='3/4')

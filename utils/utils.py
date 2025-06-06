@@ -120,7 +120,7 @@ def encode_file_to_bits(input_filepath: str) -> np.ndarray:
     filename = os.path.basename(input_filepath)
     with open(input_filepath, "rb") as f:
         data = f.read()
-    bit_size = len(data) * 8
+    bit_size = len(data)
 
     bits_filename = np.unpackbits(np.frombuffer(filename.encode('utf-8'), dtype=np.uint8))
     bits_null = np.unpackbits(np.frombuffer(b'\x00', dtype=np.uint8))
@@ -149,7 +149,7 @@ def decode_bits_to_file(bits: np.ndarray, output_dir: str = "."):
     try:
         filename = filename_bytes.decode('utf-8')
         bit_size = int(bit_size_bytes.decode('utf-8'))
-        file_data = file_data[:(bit_size + 7) // 8]
+        file_data = file_data[:bit_size]
     except Exception as e:
         raise ValueError("Failed to parse metadata") from e
 

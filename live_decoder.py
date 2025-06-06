@@ -59,7 +59,7 @@ if __name__ == "__main__":
     if KNOWN_RECEIVER:
         original_bits = get_original_bits()
         sent_symbols = get_symbols_from_bitstream(original_bits)
-        plot_sent_received_constellation(received_symbols, received_symbols)
+        plot_sent_received_constellation(sent_symbols, received_symbols)
         plot_error_per_bin(received_symbols, sent_symbols, filter)
         received_data = received_data[:len(original_bits)]
         print(f'Bit Error Rate after LDPC: {np.sum(received_data != original_bits) / len(original_bits) * 100:.2f}%')

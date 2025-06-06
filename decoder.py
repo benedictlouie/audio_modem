@@ -45,20 +45,21 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         current_index += 1
 
     # indices are the theoretical start indices of each known block - found by adding the frame length to the start index of the first known block
-    indices = np.arange(current_index) * FRAME_LENGTH + startIndex + CHIRP_LENGTH
+    x = np.concatenate(([startIndex], np.arange(current_index) * FRAME_LENGTH + startIndex + CHIRP_LENGTH, [startIndex + CHIRP_LENGTH + current_index * FRAME_LENGTH]))
+    y = np.concatenate(([startIndex], sync_indices, [endIndex]))
 
     # Find the drift gradient by regression of the theoretical indices and the indices found by synchronization.
     # Using m = ∑xy/∑x² with normalised values, we estiate the slope
-    drift_gradient = np.dot(indices - np.mean(indices), sync_indices - np.mean(sync_indices)) / np.sum((indices - np.mean(indices)) ** 2)
+    drift_gradient = np.dot(x - np.mean(x), y - np.mean(y)) / np.sum((x - np.mean(x)) ** 2)
 
     # Using c = (∑y - m∑x) / N, we estimate the intercept
-    drift_constant = np.mean(sync_indices) - drift_gradient * np.mean(indices)
+    drift_constant = np.mean(y) - drift_gradient * np.mean(x)
 
     # frame_indices is a matrix with frameLength columns, every row contains the corrected sample indices
     frame_indices = (np.arange(startIndex + CHIRP_LENGTH, startIndex + CHIRP_LENGTH + current_index * FRAME_LENGTH) * drift_gradient + drift_constant).reshape(-1, FRAME_LENGTH)
 
     # extarcted_indices is a matrix of the same shape, but rounding every value to an integer
-    extracted_indices = np.vstack([np.arange(round(row[0]), round(row[0]) + FRAME_LENGTH) for row in frame_indices])
+    extracted_indices = np.vstack([np.arange(round(row[0]), round(row[0]) + FRAME_LENGTH) for row in frame_indices]) - SHIFT_BACK
     drift = extracted_indices - frame_indices
 
     # Extract relevant blocks we want
@@ -75,7 +76,6 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     # Remove cyclic prefix
     received_information_blocks = received_information_blocks[:, CYCLIC_PREFIX:] # N_DFT columns
 
-    # TODO: Check whether the drift across the cyclic prefix is accounted for correctly
     information_block_drift = drift[:, BLOCK_LENGTH:]
     information_block_drift = np.reshape(information_block_drift, (-1, BLOCK_LENGTH))[:, CYCLIC_PREFIX:] # N_DFT columns
 

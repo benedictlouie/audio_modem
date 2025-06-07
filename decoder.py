@@ -7,43 +7,68 @@ from utils.utils import *
 from utils.plot import *
 
 def iterative_decoder(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    received_frames, drift, known_blocks = synchronize(signal)
-    
-    sent_known_blocks = known_blocks[:, :BLOCK_LENGTH]
-    received_known_blocks = received_frames[:, :BLOCK_LENGTH]
-    known_block_drift = drift[:, :BLOCK_LENGTH]
-
-    received_information_frame = received_frames[:, BLOCK_LENGTH:] # BLOCK_LENGTH * INFORMATION_BLOCKS_PER_FRAME columns
-    received_information_blocks = np.reshape(received_information_frame, (-1, BLOCK_LENGTH)) # BLOCK_LENGTH columns
-    information_block_drift = drift[:, BLOCK_LENGTH:].reshape(-1, BLOCK_LENGTH)
-
-    channel_coefficients, noise_var, snr = estimate_channel_coefficients(sent_known_blocks, received_known_blocks, known_block_drift)
-    filter = estimate_filter(channel_coefficients, information_block_drift, snr)
-
-    received_symbols = decode(received_information_blocks, filter)
-    ldpc_noise_variance = estimate_ldpc_noise_variance(channel_coefficients, noise_var)
-    received_data, max_iter = get_bitstream_from_symbols(received_symbols, ldpc_noise_variance)
-
-    # return received_data, received_symbols
+    y, x, known_blocks, startIndex, num_frames = synchronize(signal)
+    max_iter = [True] * num_frames * INFORMATION_BLOCKS_PER_FRAME * 2
 
     while True:
         decoded_blocks_bool = [not (max_iter[i] or max_iter[i + 1]) for i in range(0, len(max_iter), 2)]
 
-        encoded_symbols = get_symbols_from_bitstream(received_data)
-        encoded_blocks = encode(encoded_symbols).reshape(-1, BLOCK_LENGTH)
-        encoded_channel_coefficients, noise_var, snr = estimate_channel_coefficients(encoded_blocks[decoded_blocks_bool],
-                                                    received_information_blocks[decoded_blocks_bool],
-                                                    information_block_drift[decoded_blocks_bool])
+        # Find indices of decoded information blocks
+        new_x = x.copy()
+        new_y = y.copy()
+        points = BLOCK_LENGTH // SYNCHRONIZATION_LENGTH
+        for frame_count in range(num_frames):
+            frame_index = startIndex + CHIRP_LENGTH + frame_count * FRAME_LENGTH
+            for info_count in range(INFORMATION_BLOCKS_PER_FRAME):
+                count = frame_count * INFORMATION_BLOCKS_PER_FRAME + info_count
+                if not decoded_blocks_bool[count]: continue
+                for sync_count in range(points):
+                    sync_index = frame_index + (info_count + 1) * BLOCK_LENGTH + sync_count * SYNCHRONIZATION_LENGTH
+                    new_x = np.append(new_x, sync_index)
 
-        new_channel_coefficients = np.vstack((channel_coefficients, encoded_channel_coefficients))
-        new_filter = estimate_filter(new_channel_coefficients, information_block_drift, snr)
-        received_symbols = decode(received_information_blocks, new_filter)
+                    sync_signal = encoded_blocks[count, sync_count * SYNCHRONIZATION_LENGTH: (sync_count + 1) * SYNCHRONIZATION_LENGTH]
+                    left_bound = sync_index - SYNCHRONIZATION_LENGTH // 2
+                    right_bound = sync_index + 3 * SYNCHRONIZATION_LENGTH // 2
+                    
+                    found_index = np.argmax(np.correlate(signal[left_bound:right_bound], sync_signal)) + left_bound
+                    new_y = np.append(new_y, found_index)
+
+        drift_gradient = np.dot(new_x - np.mean(new_x), new_y - np.mean(new_y)) / np.sum((new_x - np.mean(new_x)) ** 2)
+        drift_constant = np.mean(new_y) - drift_gradient * np.mean(new_x)
+
+        frame_indices = (np.arange(startIndex + CHIRP_LENGTH, startIndex + CHIRP_LENGTH + num_frames * FRAME_LENGTH) * drift_gradient + drift_constant).reshape(-1, FRAME_LENGTH)
+
+        extracted_indices = np.vstack([np.arange(round(row[0]), round(row[0]) + FRAME_LENGTH) for row in frame_indices]) - SHIFT_BACK
+        drift = extracted_indices - frame_indices
+
+        received_frames = signal[extracted_indices]
+        
+        sent_known_blocks = known_blocks[:, :BLOCK_LENGTH]
+        received_known_blocks = received_frames[:, :BLOCK_LENGTH]
+        known_block_drift = drift[:, :BLOCK_LENGTH]
+
+        received_information_frame = received_frames[:, BLOCK_LENGTH:]
+        received_information_blocks = np.reshape(received_information_frame, (-1, BLOCK_LENGTH))
+        information_block_drift = drift[:, BLOCK_LENGTH:].reshape(-1, BLOCK_LENGTH)
+
+        # If any decoded block, add to the channel estimation
+        if any(decoded_blocks_bool):
+            sent_known_blocks = np.vstack([sent_known_blocks, encoded_blocks[decoded_blocks_bool]])
+            received_known_blocks = np.vstack([received_known_blocks, received_information_blocks[decoded_blocks_bool]])
+            known_block_drift = np.vstack([known_block_drift, information_block_drift[decoded_blocks_bool]])
+
+        channel_coefficients, noise_var, snr = estimate_channel_coefficients(sent_known_blocks, received_known_blocks, known_block_drift)
+        filter = estimate_filter(channel_coefficients, information_block_drift, snr)
+
+        received_symbols = decode(received_information_blocks, filter)
         ldpc_noise_variance = estimate_ldpc_noise_variance(channel_coefficients, noise_var)
         received_data, new_max_iter = get_bitstream_from_symbols(received_symbols, ldpc_noise_variance)
-        
+
         if sum(max_iter) == sum(new_max_iter):
             break
-        max_iter = new_max_iter
+        max_iter = new_max_iter.copy()
+        encoded_symbols = get_symbols_from_bitstream(received_data)
+        encoded_blocks = encode(encoded_symbols).reshape(-1, BLOCK_LENGTH)
 
     return received_data, received_symbols
 
@@ -58,10 +83,9 @@ def decode(signal: np.ndarray, filter: np.ndarray) -> np.ndarray:
     symbols = fourier[:, 1+HIGH_PASS_INDEX: 1+LOW_PASS_INDEX].flatten()
     return symbols
 
-def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def synchronize(signal: np.ndarray):
     """
     Synchronize the received signal and return the filter.
-    Returns 3 matrices with N_DFT columns and an array of length N_DFT.
     """
     chirp_signal = get_chirp()
 
@@ -91,23 +115,7 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]
             found_index = np.argmax(np.correlate(signal[left_bound:right_bound], sync_signal)) + left_bound
             y = np.append(y, found_index)
 
-    # Find the drift gradient by regression of the theoretical indices and the indices found by synchronization.
-    # Using m = ∑xy/∑x² with normalised values, we estimate the slope
-    drift_gradient = np.dot(x - np.mean(x), y - np.mean(y)) / np.sum((x - np.mean(x)) ** 2)
-
-    # Using c = (∑y - m∑x) / N, we estimate the intercept
-    drift_constant = np.mean(y) - drift_gradient * np.mean(x)
-
-    # frame_indices is a matrix with frameLength columns, every row contains the corrected sample indices
-    frame_indices = (np.arange(startIndex + CHIRP_LENGTH, startIndex + CHIRP_LENGTH + num_frames * FRAME_LENGTH) * drift_gradient + drift_constant).reshape(-1, FRAME_LENGTH)
-
-    # extarcted_indices is a matrix of the same shape, but rounding every value to an integer
-    extracted_indices = np.vstack([np.arange(round(row[0]), round(row[0]) + FRAME_LENGTH) for row in frame_indices]) - SHIFT_BACK
-    drift = extracted_indices - frame_indices
-
-    # Extract relevant blocks we want
-    received_frames = signal[extracted_indices]
-    return received_frames, drift, known_blocks
+    return y, x, known_blocks, startIndex, num_frames
 
 def estimate_channel_coefficients(sent_known_blocks: np.ndarray,
                                     received_known_blocks: np.ndarray,
@@ -183,7 +191,6 @@ if __name__ == "__main__":
         original_bits = get_original_bits()
         sent_symbols = get_symbols_from_bitstream(original_bits)
         plot_sent_received_constellation(sent_symbols, received_symbols)
-        plot_error_per_bin(received_symbols, sent_symbols, filter)
         received_data = received_data[:len(original_bits)]
         print(f'Bit Error Rate after LDPC: {np.sum(received_data != original_bits) / len(original_bits) * 100:.2f}%')
     else:

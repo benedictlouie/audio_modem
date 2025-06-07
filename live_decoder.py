@@ -6,10 +6,10 @@ import subprocess
 import sys
 import threading
 
-from utils.utils import write_wav, get_original_bits, get_symbols_from_bitstream
+from utils.utils import write_wav, get_original_bits, get_symbols_from_bitstream, decode_bits_to_file
 from utils.parameters import *
 from utils.plot import plot_sent_received_constellation, plot_error_per_bin, plot_received_constellation
-from decoder import synchronize, decode, estimate_ldpc_noise_variance, get_bitstream_from_symbols, decode_bits_to_file
+from decoder import iterative_decoder
 
 
 def open_file_with_default_app(filepath):
@@ -50,11 +50,7 @@ if __name__ == "__main__":
     sd.stop()
     write_wav(RECEIVED_AUDIO_PATH, signal)
 
-    received_information_blocks, channel_coefficients, filter, noise_var = synchronize(signal)
-    received_symbols = decode(received_information_blocks, filter)
-
-    ldpc_noise_variance = estimate_ldpc_noise_variance(channel_coefficients, noise_var)
-    received_data = get_bitstream_from_symbols(received_symbols, ldpc_noise_variance)
+    received_data, received_symbols = iterative_decoder(signal)
 
     if KNOWN_RECEIVER:
         original_bits = get_original_bits()

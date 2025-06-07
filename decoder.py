@@ -7,7 +7,7 @@ from utils.utils import *
 from utils.plot import *
 
 def iterative_decoder(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    received_frames, drift, known_blocks, num_frames = synchronize(signal)
+    received_frames, drift, known_blocks = synchronize(signal)
     
     sent_known_blocks = known_blocks[:, :BLOCK_LENGTH]
     received_known_blocks = received_frames[:, :BLOCK_LENGTH]
@@ -17,7 +17,7 @@ def iterative_decoder(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     received_information_blocks = np.reshape(received_information_frame, (-1, BLOCK_LENGTH)) # BLOCK_LENGTH columns
     information_block_drift = drift[:, BLOCK_LENGTH:].reshape(-1, BLOCK_LENGTH)
 
-    channel_coefficients, noise_var, snr = estimate_channel_coefficients(sent_known_blocks, received_known_blocks, known_block_drift, num_frames)
+    channel_coefficients, noise_var, snr = estimate_channel_coefficients(sent_known_blocks, received_known_blocks, known_block_drift)
     filter = estimate_filter(channel_coefficients, information_block_drift, snr)
 
     received_symbols = decode(received_information_blocks, filter)
@@ -34,8 +34,7 @@ def iterative_decoder(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         iter_blocks = encode(iter_symbols).reshape(-1, BLOCK_LENGTH)
         iter_channels = estimate_channel_coefficients(iter_blocks[decoded_blocks_bool],
                                                     received_information_blocks[decoded_blocks_bool],
-                                                    information_block_drift[decoded_blocks_bool],
-                                                    num_frames)
+                                                    information_block_drift[decoded_blocks_bool])
 
         iter_channels = np.vstack((channel_coefficients, iter_channels[0]))
         iter_filter = estimate_filter(iter_channels, information_block_drift, snr)
@@ -107,18 +106,17 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]
 
     # Extract relevant blocks we want
     received_frames = signal[extracted_indices]
-    return received_frames, drift, known_blocks, num_frames
+    return received_frames, drift, known_blocks
 
 def estimate_channel_coefficients(sent_known_blocks: np.ndarray,
                                     received_known_blocks: np.ndarray,
                                     known_block_drift: np.ndarray,
-                                    num_frames: int,
                                     ) -> np.ndarray:
     """
     Estimate channel coefficients from a known sent and received block.
     Returns a matrix with N_DFT columns and 2 arrays with length N_DFT
     """
-    if num_frames < NUM_FRAMES_THRESHOLD:
+    if USE_CYCLIC_PREFIX_FOR_FILTER:
         sent_known_blocks = np.vstack((sent_known_blocks[:, CYCLIC_PREFIX:], sent_known_blocks[:, :-CYCLIC_PREFIX]))
         received_known_blocks = np.vstack((received_known_blocks[:, CYCLIC_PREFIX:], received_known_blocks[:, :-CYCLIC_PREFIX]))
         known_block_drift = np.vstack((known_block_drift[:, CYCLIC_PREFIX:], known_block_drift[:, :-CYCLIC_PREFIX]))

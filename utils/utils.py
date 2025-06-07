@@ -41,7 +41,7 @@ def get_bitstream_from_symbols(symbols: np.ndarray, noise_variance) -> np.ndarra
     LLR = LLR[:(len(LLR) // CODE.N) * CODE.N]
 
     # Decode LDPC
-    num_max_iter = 0
+    max_iter = []
     bitstream = np.array([])
     for i in range(0, len(LLR), CODE.N):
         # decoded is the final LLR after the message passing.
@@ -49,12 +49,12 @@ def get_bitstream_from_symbols(symbols: np.ndarray, noise_variance) -> np.ndarra
         decoded, num_iterations = CODE.decode(LLR[i:i + CODE.N], DECTYPE)
         # Only the first K bits matter due to the systematic generator matrix 
         bitstream = np.concatenate((bitstream, decoded[:CODE.K]))
-        num_max_iter += num_iterations == 200
+        max_iter.append(num_iterations == 200)
 
-    print(f"LDPC decoding finished with {num_max_iter} max iterations.")
+    print(f"LDPC decoding finished with {sum(max_iter)} max iterations.")
     # Replace positive LLRs with 0 and negative LLRs with 1.
     bitstream = np.where(bitstream > 0, 0, 1)
-    return bitstream, num_max_iter
+    return bitstream, max_iter
 
 def get_symbols_from_bitstream(bitstream: np.ndarray, skip_encoding: bool = False) -> np.ndarray:
     """

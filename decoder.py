@@ -7,31 +7,45 @@ from utils.utils import *
 from utils.plot import *
 
 def iterative_decoder(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    received_information_blocks, channel_coefficients, filter, noise_var, drift, snr = synchronize(signal)
-    received_symbols = decode(received_information_blocks, filter)
-    ldpc_noise_variance = estimate_ldpc_noise_variance(channel_coefficients, noise_var)
-    received_data, num_max_iter = get_bitstream_from_symbols(received_symbols, ldpc_noise_variance)
+    received_frames, drift, known_blocks, num_frames = synchronize(signal)
+    
+    sent_known_blocks = known_blocks[:, :BLOCK_LENGTH]
+    received_known_blocks = received_frames[:, :BLOCK_LENGTH]
+    known_block_drift = drift[:, :BLOCK_LENGTH]
 
+    received_information_frame = received_frames[:, BLOCK_LENGTH:] # BLOCK_LENGTH * INFORMATION_BLOCKS_PER_FRAME columns
+    received_information_blocks = np.reshape(received_information_frame, (-1, BLOCK_LENGTH)) # BLOCK_LENGTH columns
     information_block_drift = drift[:, BLOCK_LENGTH:].reshape(-1, BLOCK_LENGTH)
 
-    iterations = 0
-    while True:
-        if num_max_iter == 0:
-            print('Fully decoded in', iterations, 'iterations.')
-            return received_data, received_symbols
-        if iterations == MAX_DECODER_ITERATIONS:
-            print('Maximum number of iterations reached:', MAX_DECODER_ITERATIONS)
-            return received_data, received_symbols
-        iter_symbols = get_symbols_from_bitstream(received_data)
-        iter_signal = encode(iter_symbols).reshape(-1, BLOCK_LENGTH)
+    channel_coefficients, noise_var, snr = estimate_channel_coefficients(sent_known_blocks, received_known_blocks, known_block_drift, num_frames)
+    filter = estimate_filter(channel_coefficients, information_block_drift, snr)
 
-        iter_channel = estimate_channel_coefficients(iter_signal, received_information_blocks, information_block_drift)
-        iter_filter = estimate_filter(iter_channel, information_block_drift, snr)
-        filter = (filter + iter_filter) / 2
-        received_symbols = decode(received_information_blocks, filter)
-        received_data, num_max_iter = get_bitstream_from_symbols(received_symbols, ldpc_noise_variance)
-        
-        iterations += 1
+    received_symbols = decode(received_information_blocks, filter)
+    ldpc_noise_variance = estimate_ldpc_noise_variance(channel_coefficients, noise_var)
+    received_data, max_iter = get_bitstream_from_symbols(received_symbols, ldpc_noise_variance)
+
+    # return received_data, received_symbols
+
+    old_max_iter_count = sum(max_iter)
+    while True:
+        decoded_blocks_bool = [not (max_iter[i] or max_iter[i + 1]) for i in range(0, len(max_iter), 2)]
+
+        iter_symbols = get_symbols_from_bitstream(received_data)
+        iter_blocks = encode(iter_symbols).reshape(-1, BLOCK_LENGTH)
+        iter_channels = estimate_channel_coefficients(iter_blocks[decoded_blocks_bool],
+                                                    received_information_blocks[decoded_blocks_bool],
+                                                    information_block_drift[decoded_blocks_bool],
+                                                    num_frames)
+
+        iter_channels = np.vstack((channel_coefficients, iter_channels[0]))
+        iter_filter = estimate_filter(iter_channels, information_block_drift, snr)
+        received_symbols = decode(received_information_blocks, iter_filter)
+        received_data, max_iter = get_bitstream_from_symbols(received_symbols, ldpc_noise_variance)
+        new_max_iter_count = sum(max_iter)
+        if new_max_iter_count == old_max_iter_count:
+            break
+
+    return received_data, received_symbols
 
 
 def decode(signal: np.ndarray, filter: np.ndarray) -> np.ndarray:
@@ -44,7 +58,7 @@ def decode(signal: np.ndarray, filter: np.ndarray) -> np.ndarray:
     symbols = fourier[:, 1+HIGH_PASS_INDEX: 1+LOW_PASS_INDEX].flatten()
     return symbols
 
-def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Synchronize the received signal and return the filter.
     Returns 3 matrices with N_DFT columns and an array of length N_DFT.
@@ -93,32 +107,25 @@ def synchronize(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
 
     # Extract relevant blocks we want
     received_frames = signal[extracted_indices]
-
-    # Get the known blocks and informations blocks and their drift.
-    sent_known_blocks = known_blocks[:, :BLOCK_LENGTH]
-    received_known_blocks = received_frames[:, :BLOCK_LENGTH]
-    known_block_drift = drift[:, :BLOCK_LENGTH]
-
-    received_information_frame = received_frames[:, BLOCK_LENGTH:] # BLOCK_LENGTH * INFORMATION_BLOCKS_PER_FRAME columns
-    received_information_blocks = np.reshape(received_information_frame, (-1, BLOCK_LENGTH)) # BLOCK_LENGTH columns
-    information_block_drift = drift[:, BLOCK_LENGTH:].reshape(-1, BLOCK_LENGTH)
-
-    channel_coefficients, noise_var, snr = estimate_channel_coefficients(sent_known_blocks, received_known_blocks, known_block_drift)
-    filter = estimate_filter(channel_coefficients, information_block_drift, snr)
-    return received_information_blocks, channel_coefficients, filter, noise_var, drift, snr
+    return received_frames, drift, known_blocks, num_frames
 
 def estimate_channel_coefficients(sent_known_blocks: np.ndarray,
                                     received_known_blocks: np.ndarray,
-                                    known_block_drift: np.ndarray
+                                    known_block_drift: np.ndarray,
+                                    num_frames: int,
                                     ) -> np.ndarray:
     """
     Estimate channel coefficients from a known sent and received block.
     Returns a matrix with N_DFT columns and 2 arrays with length N_DFT
     """
-
-    sent_known_blocks = np.vstack((sent_known_blocks[:, CYCLIC_PREFIX:], sent_known_blocks[:, :-CYCLIC_PREFIX]))
-    received_known_blocks = np.vstack((received_known_blocks[:, CYCLIC_PREFIX:], received_known_blocks[:, :-CYCLIC_PREFIX]))
-    known_block_drift = np.vstack((known_block_drift[:, CYCLIC_PREFIX:], known_block_drift[:, :-CYCLIC_PREFIX]))
+    if num_frames < NUM_FRAMES_THRESHOLD:
+        sent_known_blocks = np.vstack((sent_known_blocks[:, CYCLIC_PREFIX:], sent_known_blocks[:, :-CYCLIC_PREFIX]))
+        received_known_blocks = np.vstack((received_known_blocks[:, CYCLIC_PREFIX:], received_known_blocks[:, :-CYCLIC_PREFIX]))
+        known_block_drift = np.vstack((known_block_drift[:, CYCLIC_PREFIX:], known_block_drift[:, :-CYCLIC_PREFIX]))
+    else:
+        sent_known_blocks = sent_known_blocks[:, CYCLIC_PREFIX:]
+        received_known_blocks = received_known_blocks[:, CYCLIC_PREFIX:]
+        known_block_drift = known_block_drift[:, CYCLIC_PREFIX:]
 
     # FFT of sent and received known blocks across every row, each row has N_DFT columns
     sent_fourier = np.fft.fft(sent_known_blocks, axis=1)

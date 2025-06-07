@@ -4,7 +4,7 @@ import utils.ldpc as ldpc
 AUDIO_PATH = "output.wav"               # Output audio after encoding
 RECEIVED_AUDIO_PATH = AUDIO_PATH
 RECEIVED_AUDIO_PATH = "received_lucas.wav"    # Input audio for decoding
-FILE_PATH = "files/caca.tiff"
+FILE_PATH = "files/jossy_tiny.tiff"
 KNOWN_RECEIVER = False
 SHIFT_BACK = 3
 SYNCHRONIZATION_LENGTH = 2**11

@@ -68,7 +68,7 @@ def get_symbols_from_bitstream(bitstream: np.ndarray, skip_encoding: bool = Fals
         encoded_bitstream = bitstream
     else:
         # Pad until a multiple of CODE.K before doing LDPC
-        bitstream = np.concatenate((bitstream, np.random.default_rng(42).integers(2, size=(-len(bitstream)) % CODE.K)))
+        bitstream = np.concatenate((bitstream, np.random.default_rng(1).integers(2, size=(-len(bitstream)) % (CODE.K * INFORMATION_BLOCKS_PER_FRAME * 2))))
 
         # Encode LDPC
         encoded_bitstream = np.array([])

@@ -16,22 +16,19 @@ def iterative_decoder(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         # Find indices of decoded information blocks
         new_x = x.copy()
         new_y = y.copy()
-        points = BLOCK_LENGTH // SYNCHRONIZATION_LENGTH
         for frame_count in range(num_frames):
             frame_index = startIndex + CHIRP_LENGTH + frame_count * FRAME_LENGTH
             for info_count in range(INFORMATION_BLOCKS_PER_FRAME):
                 count = frame_count * INFORMATION_BLOCKS_PER_FRAME + info_count
                 if not decoded_blocks_bool[count]: continue
-                for sync_count in range(points):
-                    sync_index = frame_index + (info_count + 1) * BLOCK_LENGTH + sync_count * SYNCHRONIZATION_LENGTH
-                    new_x = np.append(new_x, sync_index)
-
-                    sync_signal = encoded_blocks[count, sync_count * SYNCHRONIZATION_LENGTH: (sync_count + 1) * SYNCHRONIZATION_LENGTH]
-                    left_bound = sync_index - SYNCHRONIZATION_LENGTH // 2
-                    right_bound = sync_index + 3 * SYNCHRONIZATION_LENGTH // 2
-                    
-                    found_index = np.argmax(np.correlate(signal[left_bound:right_bound], sync_signal)) + left_bound
-                    new_y = np.append(new_y, found_index)
+                sync_index = frame_index + (info_count + 1) * BLOCK_LENGTH
+                new_x = np.append(new_x, sync_index)
+                sync_signal = encoded_blocks[count]
+                left_bound = sync_index - BLOCK_LENGTH // 2
+                right_bound = sync_index + 3 * BLOCK_LENGTH // 2
+                
+                found_index = np.argmax(np.correlate(signal[left_bound:right_bound], sync_signal)) + left_bound
+                new_y = np.append(new_y, found_index)
 
         drift_gradient = np.dot(new_x - np.mean(new_x), new_y - np.mean(new_y)) / np.sum((new_x - np.mean(new_x)) ** 2)
         drift_constant = np.mean(new_y) - drift_gradient * np.mean(new_x)
@@ -101,19 +98,17 @@ def synchronize(signal: np.ndarray):
     x = np.array([startIndex, startIndex + CHIRP_LENGTH + num_frames * FRAME_LENGTH])
     y = np.array([startIndex, endIndex])
 
-    points = BLOCK_LENGTH // SYNCHRONIZATION_LENGTH
     for frame_count in range(num_frames):
         frame_index = startIndex + CHIRP_LENGTH + frame_count * FRAME_LENGTH
-        for sync_count in range(points):
-            sync_index = frame_index + sync_count * SYNCHRONIZATION_LENGTH
-            x = np.append(x, sync_index)
+        sync_index = frame_index
+        x = np.append(x, sync_index)
 
-            sync_signal = known_blocks[frame_count, sync_count * SYNCHRONIZATION_LENGTH: (sync_count + 1) * SYNCHRONIZATION_LENGTH]
-            left_bound = sync_index - SYNCHRONIZATION_LENGTH // 2
-            right_bound = sync_index + 3 * SYNCHRONIZATION_LENGTH // 2
-            
-            found_index = np.argmax(np.correlate(signal[left_bound:right_bound], sync_signal)) + left_bound
-            y = np.append(y, found_index)
+        sync_signal = known_blocks[frame_count]
+        left_bound = sync_index - BLOCK_LENGTH // 2
+        right_bound = sync_index + 3 * BLOCK_LENGTH // 2
+        
+        found_index = np.argmax(np.correlate(signal[left_bound:right_bound], sync_signal)) + left_bound
+        y = np.append(y, found_index)
 
     return y, x, known_blocks, startIndex, num_frames
 

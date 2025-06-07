@@ -8,7 +8,7 @@ import threading
 
 from utils.utils import write_wav, get_original_bits, get_symbols_from_bitstream, decode_bits_to_file
 from utils.parameters import *
-from utils.plot import plot_sent_received_constellation, plot_error_per_bin, plot_received_constellation
+from utils.plot import plot_sent_received_constellation, plot_received_constellation
 from decoder import iterative_decoder
 
 

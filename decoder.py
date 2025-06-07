@@ -26,20 +26,21 @@ def iterative_decoder(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
 
     # return received_data, received_symbols
 
-    old_max_iter_count = sum(max_iter)
     while True:
+        old_max_iter_count = sum(max_iter)
         decoded_blocks_bool = [not (max_iter[i] or max_iter[i + 1]) for i in range(0, len(max_iter), 2)]
 
-        iter_symbols = get_symbols_from_bitstream(received_data)
-        iter_blocks = encode(iter_symbols).reshape(-1, BLOCK_LENGTH)
-        iter_channels = estimate_channel_coefficients(iter_blocks[decoded_blocks_bool],
+        encoded_symbols = get_symbols_from_bitstream(received_data)
+        encoded_blocks = encode(encoded_symbols).reshape(-1, BLOCK_LENGTH)
+        encoded_channel_coefficients = estimate_channel_coefficients(encoded_blocks[decoded_blocks_bool],
                                                     received_information_blocks[decoded_blocks_bool],
-                                                    information_block_drift[decoded_blocks_bool])
+                                                    information_block_drift[decoded_blocks_bool])[0]
 
-        iter_channels = np.vstack((channel_coefficients, iter_channels[0]))
-        iter_filter = estimate_filter(iter_channels, information_block_drift, snr)
-        received_symbols = decode(received_information_blocks, iter_filter)
+        new_channel_coefficients = np.vstack((channel_coefficients, encoded_channel_coefficients))
+        new_filter = estimate_filter(new_channel_coefficients, information_block_drift, snr)
+        received_symbols = decode(received_information_blocks, new_filter)
         received_data, max_iter = get_bitstream_from_symbols(received_symbols, ldpc_noise_variance)
+        
         new_max_iter_count = sum(max_iter)
         if new_max_iter_count == old_max_iter_count:
             break

@@ -146,7 +146,7 @@ def estimate_channel_coefficients(sent_known_blocks: np.ndarray,
     snr = signal_power / noise_var
     
     # Compute noise variance for LDPC coding
-    noise_var = np.mean(np.real(noise) ** 2 + np.imag(noise) ** 2, axis=0) / 2
+    noise_var = np.mean(np.abs(noise[:, 1+HIGH_PASS_INDEX:1+LOW_PASS_INDEX]) ** 2) / 2
 
     return channel_coefficient_estimate, noise_var, snr
 

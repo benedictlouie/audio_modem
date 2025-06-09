@@ -1,11 +1,12 @@
 import utils.ldpc as ldpc
 
-# Frequently used Settings
+# Frequently-used Settings
 AUDIO_PATH = "output.wav"               # Output audio after encoding
 RECEIVED_AUDIO_PATH = AUDIO_PATH
-RECEIVED_AUDIO_PATH = "in210.wav"    # Input audio for decoding
+RECEIVED_AUDIO_PATH = "Rate 5-6/in406 - from g6.wav"    # Input audio for decoding
 FILE_PATH = "files/jossy_small.tiff"
 KNOWN_RECEIVER = False
+LDPC_RATE = '5/6'
 SHIFT_BACK = 3
 
 SAMPLE_RATE = 48000
@@ -40,4 +41,4 @@ assert BITS_PER_SYMBOL == 2
 
 # LDPC Settings
 DECTYPE = 'sumprod2'
-CODE = ldpc.code(z=81, rate='1/2')
+CODE = ldpc.code(z=81, rate=LDPC_RATE)

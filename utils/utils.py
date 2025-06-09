@@ -39,10 +39,11 @@ def get_bitstream_from_symbols(symbols: np.ndarray, noise_variance) -> np.ndarra
 
     # Use the real and imaginary parts of the symbols to find LLR.
     LLR = np.empty(len(symbols) * BITS_PER_SYMBOL)
+    symbols = np.reshape(symbols, (-1, SYMBOLS_PER_BLOCK))
+    symbols *= 2 / noise_variance
+    symbols = symbols.flatten()
     LLR[::2] = symbols.real
     LLR[1::2] = symbols.imag
-    
-    LLR = 2 * LLR / noise_variance
 
     # Decode LDPC
     max_iter = []

@@ -47,7 +47,7 @@ def iterative_decoder(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
             new_x = np.delete(new_x, max_index)
             new_y = np.delete(new_y, max_index)
             outlier_count += 1
-        print(f"Outlier count: {outlier_count}")
+        # print(f"Outlier count: {outlier_count}")
 
 
         frame_indices = (np.arange(startIndex + CHIRP_LENGTH, startIndex + CHIRP_LENGTH + num_frames * FRAME_LENGTH) * drift_gradient + drift_constant).reshape(-1, FRAME_LENGTH)
@@ -87,7 +87,7 @@ def iterative_decoder(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         encoded_symbols = get_symbols_from_bitstream(received_data)
         encoded_blocks = encode(encoded_symbols).reshape(-1, BLOCK_LENGTH)
     
-    print("Decoded blocks bool:", decoded_blocks_bool)
+    # print("Decoded blocks bool:", decoded_blocks_bool)
 
     return received_data, received_symbols
 
@@ -185,13 +185,17 @@ def estimate_filter(channel_coefficient_estimate: np.ndarray, information_block_
     return filter
 
 def estimate_ldpc_noise_variance(received_symbols: np.ndarray) -> float:
-    targets = [1 + 1j, 1 - 1j, -1 + 1j, -1 - 1j]
-    close_symbols = []
-    for target in targets:
-        distances = np.abs(received_symbols - target)
-        close_symbols.extend(received_symbols[distances < 1] - target)
-    mean_distance_squared = np.mean(np.abs(close_symbols) ** 2)
-    print(f"Estimated noise variance: {mean_distance_squared:.4f}")
+
+    received_symbols = np.reshape(received_symbols, (-1, SYMBOLS_PER_BLOCK))
+    mean_distance_squared = np.zeros(SYMBOLS_PER_BLOCK)
+    targets = [1+1j, 1-1j, -1+1j, -1-1j]
+    for k in range(SYMBOLS_PER_BLOCK):
+        close_symbols = []
+        for target in targets:
+            distances = np.abs(received_symbols[:, k] - target)
+            close_symbols.extend(received_symbols[:, k][distances < 1] - target)
+        if close_symbols: mean_distance_squared[k] = np.mean(np.abs(close_symbols) ** 2)
+    mean_distance_squared[mean_distance_squared == 0] = np.mean(mean_distance_squared[mean_distance_squared > 0])
     return mean_distance_squared
 
 

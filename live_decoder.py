@@ -1,24 +1,12 @@
 import numpy as np
-import os
-import platform
 import sounddevice as sd
-import subprocess
 import sys
 import threading
 
-from utils.utils import write_wav, get_original_bits, get_symbols_from_bitstream, decode_bits_to_file
+from utils.utils import write_wav, get_original_bits, get_symbols_from_bitstream, decode_bits_to_file, open_file_with_default_app
 from utils.parameters import *
 from utils.plot import plot_sent_received_constellation, plot_received_constellation
 from decoder import iterative_decoder
-
-
-def open_file_with_default_app(filepath):
-    if platform.system() == 'Windows':
-        os.startfile(filepath)
-    elif platform.system() == 'Darwin':  # macOS
-        subprocess.run(['open', filepath])
-    else:  # Linux and other Unix-like systems
-        subprocess.run(['xdg-open', filepath])
 
 def record_until_enter(samplerate=48000, channels=1):
     print("Recording... Press Enter to stop.")

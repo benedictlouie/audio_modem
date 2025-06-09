@@ -17,11 +17,10 @@ def iterative_decoder(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         new_x = x.copy()
         new_y = y.copy()
         for frame_count in range(num_frames):
-            frame_index = startIndex + CHIRP_LENGTH + frame_count * FRAME_LENGTH
             for info_count in range(INFORMATION_BLOCKS_PER_FRAME):
                 count = frame_count * INFORMATION_BLOCKS_PER_FRAME + info_count
                 if not decoded_blocks_bool[count]: continue
-                sync_index = frame_index + (info_count + 1) * BLOCK_LENGTH
+                sync_index = startIndex + CHIRP_LENGTH + frame_count * FRAME_LENGTH + (info_count + 1) * BLOCK_LENGTH
                 new_x = np.append(new_x, sync_index)
                 sync_signal = encoded_blocks[count]
                 left_bound = sync_index - BLOCK_LENGTH // 2
@@ -30,8 +29,26 @@ def iterative_decoder(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
                 found_index = np.argmax(np.correlate(signal[left_bound:right_bound], sync_signal)) + left_bound
                 new_y = np.append(new_y, found_index)
 
-        drift_gradient = np.dot(new_x - np.mean(new_x), new_y - np.mean(new_y)) / np.sum((new_x - np.mean(new_x)) ** 2)
-        drift_constant = np.mean(new_y) - drift_gradient * np.mean(new_x)
+        outlier_count = 0
+        while True:
+            if len(new_x) < 2: exit('bad synchronization')
+            drift_gradient = np.dot(new_x - np.mean(new_x), new_y - np.mean(new_y)) / np.sum((new_x - np.mean(new_x)) ** 2)
+            drift_constant = np.mean(new_y) - drift_gradient * np.mean(new_x)
+
+            pred_y = drift_gradient * new_x + drift_constant
+            residuals = np.abs(new_y - pred_y)
+            mse = np.mean(residuals ** 2)
+            
+            if mse < 1:
+                break
+
+            # remove the largest residual
+            max_index = np.argmax(residuals)
+            new_x = np.delete(new_x, max_index)
+            new_y = np.delete(new_y, max_index)
+            outlier_count += 1
+        print(f"Outlier count: {outlier_count}")
+
 
         frame_indices = (np.arange(startIndex + CHIRP_LENGTH, startIndex + CHIRP_LENGTH + num_frames * FRAME_LENGTH) * drift_gradient + drift_constant).reshape(-1, FRAME_LENGTH)
 
@@ -54,11 +71,11 @@ def iterative_decoder(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
             received_known_blocks = np.vstack([received_known_blocks, received_information_blocks[decoded_blocks_bool]])
             known_block_drift = np.vstack([known_block_drift, information_block_drift[decoded_blocks_bool]])
 
-        channel_coefficients, noise_var, snr = estimate_channel_coefficients(sent_known_blocks, received_known_blocks, known_block_drift)
+        channel_coefficients, snr = estimate_channel_coefficients(sent_known_blocks, received_known_blocks, known_block_drift)
         filter = estimate_filter(channel_coefficients, information_block_drift, snr)
 
         received_symbols = decode(received_information_blocks, filter)
-        ldpc_noise_variance = estimate_ldpc_noise_variance(channel_coefficients, noise_var)
+        ldpc_noise_variance = estimate_ldpc_noise_variance(received_symbols)
         received_data, new_max_iter = get_bitstream_from_symbols(received_symbols, ldpc_noise_variance)
 
         if sum(max_iter) == sum(new_max_iter):
@@ -66,6 +83,8 @@ def iterative_decoder(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         max_iter = new_max_iter.copy()
         encoded_symbols = get_symbols_from_bitstream(received_data)
         encoded_blocks = encode(encoded_symbols).reshape(-1, BLOCK_LENGTH)
+    
+    print("Decoded blocks bool:", decoded_blocks_bool)
 
     return received_data, received_symbols
 
@@ -138,14 +157,14 @@ def estimate_channel_coefficients(sent_known_blocks: np.ndarray,
 
     # noise is equal to Y - HX
     mean_channel_coefficient = np.mean(channel_coefficient_estimate, axis=0)
-    noise = mean_channel_coefficient * sent_fourier - received_fourier
-    noise_var = np.mean(np.abs(noise[:, 1+HIGH_PASS_INDEX:1+LOW_PASS_INDEX]) ** 2)
+    noise = sent_fourier * mean_channel_coefficient - received_fourier
+    noise_power = np.mean(np.abs(noise) ** 2, axis=0)
 
     # Estimate SNR from signal_power / noise_var
     signal_power = np.mean(np.abs(sent_fourier) ** 2, axis=0)
-    snr = signal_power / noise_var
+    snr = signal_power / noise_power
 
-    return channel_coefficient_estimate, noise_var, snr
+    return channel_coefficient_estimate, snr
 
 def estimate_filter(channel_coefficient_estimate: np.ndarray, information_block_drift: np.ndarray, snr):
     """
@@ -162,17 +181,17 @@ def estimate_filter(channel_coefficient_estimate: np.ndarray, information_block_
     filter = np.mean(filter, axis=0) * np.exp(-2j * np.pi * np.arange(N_DFT) * information_block_drift / N_DFT)
     return filter
 
-def estimate_ldpc_noise_variance(channel_coefficients: np.ndarray, sigma2):
-    """
-    FOR LDPC DECODING
-    Returns sigma_k^2, an array of length SYMBOLS_PER_BLOCK.
-    """
-    # Find the mean of channel_coefficients across DFT blocks
-    # After that, channel_coefficients has length N_DFT
-    channel_coefficients = np.mean(channel_coefficients, axis=0)
-    magnitude_squared = np.abs(channel_coefficients) ** 2
-    sigmak2 = sigma2 / magnitude_squared
-    return sigmak2[1+HIGH_PASS_INDEX: 1+LOW_PASS_INDEX]
+def estimate_ldpc_noise_variance(received_symbols: np.ndarray) -> float:
+    plot_received_constellation(received_symbols)
+    targets = [1 + 1j, 1 - 1j, -1 + 1j, -1 - 1j]
+    close_symbols = []
+    for target in targets:
+        distances = np.abs(received_symbols - target)
+        close_symbols.extend(received_symbols[distances < 1] - target)
+    plot_received_constellation(np.array(close_symbols))
+    mean_distance_squared = np.mean(np.abs(close_symbols) ** 2)
+    return mean_distance_squared
+
 
 if __name__ == "__main__":
     signal = load_audio_file(RECEIVED_AUDIO_PATH)
@@ -189,3 +208,4 @@ if __name__ == "__main__":
         plot_received_constellation(received_symbols)
 
     path = decode_bits_to_file(received_data)
+    open_file_with_default_app(path)

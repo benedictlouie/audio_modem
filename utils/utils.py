@@ -1,12 +1,23 @@
 import os
 import librosa
 import numpy as np
+import subprocess
+import os
+import platform
 from scipy.io.wavfile import write
 
 from utils.parameters import *
 
 def load_audio_file(file_path: str) -> np.ndarray:
     return librosa.load(file_path, sr=None)[0]
+
+def open_file_with_default_app(filepath):
+    if platform.system() == 'Windows':
+        os.startfile(filepath)
+    elif platform.system() == 'Darwin':  # macOS
+        subprocess.run(['open', filepath])
+    else:  # Linux and other Unix-like systems
+        subprocess.run(['xdg-open', filepath])
 
 def write_wav(filename: str, data: np.ndarray, sample_rate: int = SAMPLE_RATE) -> None:
     data = np.int16(data / np.max(np.abs(data)) * 32767)
@@ -31,14 +42,7 @@ def get_bitstream_from_symbols(symbols: np.ndarray, noise_variance) -> np.ndarra
     LLR[::2] = symbols.real
     LLR[1::2] = symbols.imag
     
-    # Find LLR
-    if not isinstance(noise_variance, (np.ndarray, list, tuple)): noise_variance = np.array([noise_variance])
-    assert len(LLR) % len(noise_variance) == 0
-    noise_variance = np.tile(noise_variance, len(LLR) // len(noise_variance))
-    LLR *= np.sqrt(2) / noise_variance
-
-    # Stop at the last multiple of N
-    LLR = LLR[:(len(LLR) // CODE.N) * CODE.N]
+    LLR = 2 * LLR / noise_variance
 
     # Decode LDPC
     max_iter = []

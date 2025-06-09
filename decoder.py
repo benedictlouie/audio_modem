@@ -182,13 +182,11 @@ def estimate_filter(channel_coefficient_estimate: np.ndarray, information_block_
     return filter
 
 def estimate_ldpc_noise_variance(received_symbols: np.ndarray) -> float:
-    plot_received_constellation(received_symbols)
     targets = [1 + 1j, 1 - 1j, -1 + 1j, -1 - 1j]
     close_symbols = []
     for target in targets:
         distances = np.abs(received_symbols - target)
         close_symbols.extend(received_symbols[distances < 1] - target)
-    plot_received_constellation(np.array(close_symbols))
     mean_distance_squared = np.mean(np.abs(close_symbols) ** 2)
     return mean_distance_squared
 

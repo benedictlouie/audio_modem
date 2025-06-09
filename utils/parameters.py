@@ -3,7 +3,7 @@ import utils.ldpc as ldpc
 # Frequently used Settings
 AUDIO_PATH = "output.wav"               # Output audio after encoding
 RECEIVED_AUDIO_PATH = AUDIO_PATH
-RECEIVED_AUDIO_PATH = "received.wav"    # Input audio for decoding
+RECEIVED_AUDIO_PATH = "received_long_3:4.wav"    # Input audio for decoding
 FILE_PATH = "files/jossy_small.tiff"
 KNOWN_RECEIVER = False
 SHIFT_BACK = 3
@@ -40,4 +40,4 @@ assert BITS_PER_SYMBOL == 2
 
 # LDPC Settings
 DECTYPE = 'sumprod2'
-CODE = ldpc.code(z=81, rate='5/6')
+CODE = ldpc.code(z=81, rate='3/4')

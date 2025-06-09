@@ -74,12 +74,15 @@ def iterative_decoder(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         channel_coefficients, snr = estimate_channel_coefficients(sent_known_blocks, received_known_blocks, known_block_drift)
         filter = estimate_filter(channel_coefficients, information_block_drift, snr)
 
-        received_symbols = decode(received_information_blocks, filter)
-        ldpc_noise_variance = estimate_ldpc_noise_variance(received_symbols)
-        received_data, new_max_iter = get_bitstream_from_symbols(received_symbols, ldpc_noise_variance)
+        new_received_symbols = decode(received_information_blocks, filter)
+        ldpc_noise_variance = estimate_ldpc_noise_variance(new_received_symbols)
+        new_received_data, new_max_iter = get_bitstream_from_symbols(new_received_symbols, ldpc_noise_variance)
 
-        if sum(max_iter) == sum(new_max_iter):
+        if sum(max_iter) <= sum(new_max_iter):
             break
+        received_symbols = new_received_symbols.copy()
+        received_data = new_received_data.copy()
+        
         max_iter = new_max_iter.copy()
         encoded_symbols = get_symbols_from_bitstream(received_data)
         encoded_blocks = encode(encoded_symbols).reshape(-1, BLOCK_LENGTH)
@@ -188,6 +191,7 @@ def estimate_ldpc_noise_variance(received_symbols: np.ndarray) -> float:
         distances = np.abs(received_symbols - target)
         close_symbols.extend(received_symbols[distances < 1] - target)
     mean_distance_squared = np.mean(np.abs(close_symbols) ** 2)
+    print(f"Estimated noise variance: {mean_distance_squared:.4f}")
     return mean_distance_squared
 
 

@@ -139,14 +139,11 @@ def estimate_channel_coefficients(sent_known_blocks: np.ndarray,
     # noise is equal to Y - HX
     mean_channel_coefficient = np.mean(channel_coefficient_estimate, axis=0)
     noise = mean_channel_coefficient * sent_fourier - received_fourier
-    noise_var = np.mean(np.abs(noise) ** 2, axis=0)
+    noise_var = np.mean(np.abs(noise[:, 1+HIGH_PASS_INDEX:1+LOW_PASS_INDEX]) ** 2)
 
     # Estimate SNR from signal_power / noise_var
     signal_power = np.mean(np.abs(sent_fourier) ** 2, axis=0)
     snr = signal_power / noise_var
-    
-    # Compute noise variance for LDPC coding
-    noise_var = np.mean(np.abs(noise[:, 1+HIGH_PASS_INDEX:1+LOW_PASS_INDEX]) ** 2) / 2
 
     return channel_coefficient_estimate, noise_var, snr
 

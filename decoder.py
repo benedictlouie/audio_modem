@@ -1,5 +1,6 @@
 import numpy as np
 from typing import Tuple
+from sklearn.linear_model import RANSACRegressor, LinearRegression
 
 from encoder import encode
 from utils.parameters import *
@@ -29,26 +30,29 @@ def iterative_decoder(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
                 found_index = np.argmax(np.correlate(signal[left_bound:right_bound], sync_signal)) + left_bound
                 new_y = np.append(new_y, found_index)
 
-        outlier_count = 0
-        while True:
-            if len(new_x) < 2: exit('bad synchronization')
-            drift_gradient = np.dot(new_x - np.mean(new_x), new_y - np.mean(new_y)) / np.sum((new_x - np.mean(new_x)) ** 2)
-            drift_constant = np.mean(new_y) - drift_gradient * np.mean(new_x)
+        new_x = new_x.reshape(-1, 1)  # reshape for sklearn
 
-            pred_y = drift_gradient * new_x + drift_constant
-            residuals = np.abs(new_y - pred_y)
-            mse = np.mean(residuals ** 2)
-            
-            if mse < 1:
-                break
+        # --- Step 2: Fit RANSAC model ---
+        ransac = RANSACRegressor(
+            estimator=LinearRegression(),
+            residual_threshold=RESIDUAL_THRESHOLD,
+            max_trials=1000,
+            random_state=42
+        )
+        ransac.fit(new_x, new_y)
 
-            # remove the largest residual
-            max_index = np.argmax(residuals)
-            new_x = np.delete(new_x, max_index)
-            new_y = np.delete(new_y, max_index)
-            outlier_count += 1
-        # print(f"Outlier count: {outlier_count}")
+        # --- Step 3: Get results ---
+        inlier_mask = ransac.inlier_mask_
 
+        # Get the inlier points
+        inlier_x = new_x[inlier_mask]
+        inlier_y = new_y[inlier_mask]
+
+        # Fit a linear model to the inliers
+        linear_model = LinearRegression()
+        linear_model.fit(inlier_x, inlier_y)
+        drift_gradient = linear_model.coef_[0]
+        drift_constant = linear_model.intercept_
 
         frame_indices = (np.arange(startIndex + CHIRP_LENGTH, startIndex + CHIRP_LENGTH + num_frames * FRAME_LENGTH) * drift_gradient + drift_constant).reshape(-1, FRAME_LENGTH)
 
@@ -75,6 +79,10 @@ def iterative_decoder(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         filter = estimate_filter(channel_coefficients, information_block_drift, snr)
 
         new_received_symbols = decode(received_information_blocks, filter)
+
+        # Normalize
+        new_received_symbols *= np.sqrt(2) / np.mean(np.abs(new_received_symbols))
+
         ldpc_noise_variance = estimate_ldpc_noise_variance(new_received_symbols)
         new_received_data, new_max_iter = get_bitstream_from_symbols(new_received_symbols, ldpc_noise_variance)
 

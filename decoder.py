@@ -78,18 +78,17 @@ def iterative_decoder(signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         ldpc_noise_variance = estimate_ldpc_noise_variance(new_received_symbols)
         new_received_data, new_max_iter = get_bitstream_from_symbols(new_received_symbols, ldpc_noise_variance)
 
-        if sum(max_iter) <= sum(new_max_iter):
-            break
+        if sum(max_iter) < sum(new_max_iter):
+            return received_data, received_symbols
+        elif sum(max_iter) == sum(new_max_iter):
+            return new_received_data, new_received_symbols
+        
         received_symbols = new_received_symbols.copy()
         received_data = new_received_data.copy()
         
         max_iter = new_max_iter.copy()
         encoded_symbols = get_symbols_from_bitstream(received_data)
         encoded_blocks = encode(encoded_symbols).reshape(-1, BLOCK_LENGTH)
-    
-    # print("Decoded blocks bool:", decoded_blocks_bool)
-
-    return received_data, received_symbols
 
 
 def decode(signal: np.ndarray, filter: np.ndarray) -> np.ndarray:

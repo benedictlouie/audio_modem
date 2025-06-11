@@ -3,10 +3,10 @@ import utils.ldpc as ldpc
 # Frequently-used Settings
 AUDIO_PATH = "output.wav"               # Output audio after encoding
 RECEIVED_AUDIO_PATH = AUDIO_PATH
-RECEIVED_AUDIO_PATH = "Rate 3-4/in215.wav"    # Input audio for decoding
+RECEIVED_AUDIO_PATH = "received.wav"    # Input audio for decoding
 FILE_PATH = "received_5.tiff"
 KNOWN_RECEIVER = False
-LDPC_RATE = '3/4'
+LDPC_RATE = '5/6'
 SHIFT_BACK = 3
 RESIDUAL_THRESHOLD = 1 # For the RANSAC model
 

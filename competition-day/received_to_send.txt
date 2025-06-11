@@ -1,0 +1,127 @@
+Engineers with a conscience don't let others use breadboards. Oh, I know, it starts out easy, like any other drug. You're uncertain of yourself and instead of doing calculations, or even back of the envelope calculations you say to yourself " I'll do the _easy_ thing, I'll breadboard it- I don't have to think too much and then I can move on". But that is the easy lie, sort of like using SPICE (but I digress) when you should be calculating _gm_. So you try it, perhaps your friends are doing it too, you want to fit in. And hey! it works, and you didn't have to spend too much time at it. But in doing so, you don't get the practise of doing those calculations, that skill never develops and eventually you end up being dependant upon the little suckers. _and then they turn on you_ You're projects have started to grow, and get larger and say you want to show someone "the cool thing" you have been doing. And they want to _touch_ it and you jump at them, not willing to allow them to touch your baby, your _precious_. I was lucky when I started out. Someone gave me a breadboard to work with, and I now suspect that they did it on purpose. The thing is, this breadboard was damaged, and I wasted hours trying to get something running when it was a faulty breadboard. I didn't have that internal modelling ability, I didn't know what to expect, so I wasted time. After than once I never once used a breadboard again. Using a breadboard is an easy way out, it's an addictive drug and if you persist you'll one day find yourself wondering " hmm, can I run One Amp those those little traces?" maybe you can. But the real question is, should you? with that much power, what happens when the board shorts out in behind (like they are wont to do)? Listen, there are lots of ways to prototype things that take only a little more time than a breadboard that are semi-permanent, are not fragile, are smaller and _more importantly_ allow you to build high performance circuits (be that high amperage or high frequency). Use protoboards or dead bug the circuit. Being a little slower actually is a good thing, because you end up with something that can be handled, doesn't stop working the moment that someone sneezes and most importantly ... because you are going to put more effort into it, you learn to actually calculate _before_ you commit. You end up learning more. So kick the habit dead bug that sucker. You'll find that you get a better circuit by far.
+
+---
+
+I'd just like to interject for a moment. What you're referring to as tea, is in fact, water/tea, or as I've recently taken to calling it, water plus tea. Tea is not a beverage unto itself, but rather another physical component of a fully refreshing beverage made useful by the water liquidity, temperature and solvent properties comprising a full beverage as defined by the FDA.
+
+Many people drink a modified version of water every day, without realizing it. Through a peculiar turn of events, the version of water which is widely drunk today is often called "tea", and many of its drinkers are not aware that it is basically water, developed by the Water Project.
+
+There really is tea, and these people are consuming it, but it is just a part of the beverage they drink. Tea is the flavouring: the collection of chemicals that activate your taste receptors. The flavouring is an essential part of a beverage, but useless by itself; it can only function in the context of a complete beverage. Tea is normally used in combination with water: the whole beverage is basically water with tea added, or water/tea. All the so-called "tea" beverages are really versions of water/tea.
+
+Many users do not understand the difference between the flavouring, which is tea, and the whole beverage, which they also call "tea". The ambiguous use of the name doesn't help people understand. These users often think that the East India Company developed the whole beverage in 1607, with a bit of help.
+
+Brewers generally know that tea is a flavouring. But since they have generally heard the whole beverage called "tea" as well, they often envisage a history that would justify naming the whole beverage after the flavouring. For example, many believe that once the East India Company finished shipping tea, the flavouring, its consumers looked around for other nourishment to go with it, and found that (for no particular reason) most everything necessary to make a delicious beverage was already available.
+
+What they found was no accident—it was the not-quite-complete water beverage. The available nourishment added up to a complete beverage because the Water Project had been working since 4000BC to make one. In the Water Manifesto we set forth the goal of developing a delicious beverage, called water. The Initial Announcement of the Water Project also outlines some of the original plans for the water beverage. By the time tea was started, water was almost finished.
+
+Most software projects have the goal of developing a particular program for a particular job. For example, Linus Torvalds set out to write a Unix-like kernel (tea); Donald Knuth set out to write a text formatter (TeX); Bob Scheifler set out to develop a window beverage (the X Window beverage). It's natural to measure the contribution of this kind of project by specific programs that came from the project.
+
+If we tried to measure the Water Project's contribution in this way, what would we conclude? One water/tea vendor found that in their "tea drink", water was the largest single contingent, around 99% of the total beverage, and this included some of the essential major components without which there could be no beverage. Tea itself was about 1%. So if you were going to pick a name for the beverage based on the components of the beverage, the most appropriate single choice would be "water".
+
+But that is not the deepest way to consider the question. The Water Project was not, is not, a project to develop specific drinks. It was not a project to develop a hot drink, although we did that. It was not a project to develop a cold drink, although we developed one. The water Project set out to develop a complete beverage: water.
+
+Many people have made major contributions to the components of the water/tea, and they all deserve credit for their contributions. But the reason it is an integrated beverage—and not just a collection of useful substances—is because the Water Project set out to make it one. We made a list of the components needed to make a complete beverage, and we systematically found, created, or found people to create everything on the list. We made essential but unexciting components because you can't have a beverage without them. Some of our beverage components, the solvent properties, became popular on their own among scientists, but we developed many components that are not tools (2). We even developed a game, water polo, because a complete beverage needs games too.
+
+By the early 90s we had put together the whole beverage aside from the flavouring. We had also started a flavour, the water Hurd. Developing this flavour has been a lot harder than we expected; the Water Hurd started tasting good in 2001, but it is a long way from being ready for people to drink in general.
+
+Fortunately, we didn't have to wait for the Hurd, because of tea. Once the East India Company distributed tea in 1607, it fit into the last major gap in the water beverage. People could then combine tea with the water beverage to make a complete beverage: a tea-based version of the water beverage; the water/tea beverage, for short.
+
+Making them work well together was not a trivial job. Some water components(3) needed substantial change to work with tea. Integrating a complete beverage as a drink that would taste good "out of the box" was a big job, too. It required addressing the issue of how to prepare and serve the beverage—a problem we had not tackled, because we hadn't yet reached that point. Thus, the people who developed the various beverage versions did a lot of essential work. But it was work that, in the nature of things, was surely going to be done by someone.
+
+Whether you use water/tea or not, please don't confuse the public by using the name "tea" ambiguously. tea is the flavouring, one of the essential major components of the beverage. The beverage as a whole is basically the water beverage, with tea added. When you're talking about this combination, please call it "water/tea".
+
+---
+
+Dear Diary, day 1
+
+Today I decided to install Linux. You cannot be a true hacker if you don't use Linux, and I do want to be a true hacker. Mainly to impress the girls. I asked to everyone I know, and found out that Giovanni uses Linux; strangely enough, he wears very thick glasses, is overweight, doesn't wash and shave, and doesn't know any girls. I was expecting someone way cooler, wearing dark sunglasses even inside and a leather trench. Probably he disguises himself to lay low. A double life! What an exciting experience to become a hacker. He suggested I should try "the" Debian, since it is "the Linux destruction" for real tough guys. And I am one. I have used a computer since I was a kid; they were always Macintosh, but when you can use a computer, you can use them all! Consider this: the hacker of Independence Day could break into the operating system of an alien spaceship: cool! I wonder why it is called a "Linux destruction". I should ask someone. What a tough name!
+
+Dear Diary, day 2
+
+Giovanni today told me that the Debian is a GNU/Linux DIS-TRI-BU-TION. Not destruction. He says that it is very important to say GNU/Linux, if you say Linux alone the Microsoft (which I should call Micro$oft or Microsuck, I don't know why) will take over the planet, Apocalypse will begin, it will turn off the Sun, will make Christ Child cry, and will prevent the development of recent games for GNU/Linux. In this exact order (of importance). Giovanni says that GNU means GNU is not Unix, but Linux is Unix and Giovanni says that this is one of the apparent contradictions that make you a true hacker. All the others are losers that deserve that a Virus sends to their grandmother pieces of pornographic e-mail they sent to their girlfriends. I cannot be a loser, since my grandmother is quadriplegic and is not able to use a computer; moreover, I've never had a girlfriend (even if I wrote some spicy stories about Kaori, the girl of that famous cheese TV spot). I'm already turning into a true hacker.
+
+Dear Diary, day 3
+
+I've given up asking questions to Giovanni, since his un-cool disguise stinks really bad, I cannot focus holding my breath. I wonder where he get the "unwashed armpit for the last 15 days", it feels TRULY real. I guess it's another hacker secret. I bought a magazine with Debian CDs. Starting from tonight, the world will be mine: I just have to install it, then I'll be a true hacker. In the magazine there are no nude girls: a true hacker gets excited with dismantled computers, or with the "source code". I tried, but I still have a lot to learn.
+
+Dear Diary, day 4
+
+I cannot find the setup.exe in the CD. Maybe it is defected. Tomorrow I'll go change it.
+
+Dear Diary, day 5
+
+There is no setup.exe! It's way easier: you insert the CD into the computer, you select from the BIOS the boot (which is an English word meaning "stivale", ah! hacker jargon! (Translator's note: here there is a play on words about the double meaning of the word boot)) from CD, and it installs. Very easy. It just took me 3 hours to find out. Now, I just have to find out how to summon the BIOS.
+
+Dear Diary, day7
+
+How lucky, BIOS in my computer is summoned by simultaneously pressing CTRL-ALT-SHIFT-DEL-Q-W-E-R-T-Y-1-2-3-4-5 during the 4 microseconds in which memory check happens. Consider that a friend of mine has a computer in which you can summon the BIOS only during new moon nights, after midnight, if you stay inside a pentagram drawn with a black cockerel blood. This is a sign, that I should become a hacker.
+
+Dear Diary, day 8
+
+I'm installing. I waited 4 hours for the graphical display to appear, but I still have only text. And no mouse pointer. I shall ask.
+
+Dear diary, day 9
+
+I should have read the text! How clever these hackers are, no one can use THEIR GNU/Linux if he doesn't know that the text should be read. It's almost like a secret society.
+
+Dear Diary, day 10
+
+Yesterday, diring the installation, it asked me to partition the hard-disk. I clicked OK 4 or 5 times, and proceeded. What are kernel modules? Don't know, I chose some at random.
+
+Dear Diary, day 11
+
+In just a week I booted the system. It says I deleted everything on my hard disk when I partitioned, but never mind: it contained only my last 3 years email with every email address I had (everyone is going to get back in touch when I'll be a famous hacker) and the digital copy of the demonstration of the last Fermat theorem I found in my grandmother's attic, after she passed away (I couldn't attend her funeral because I was installing). Everything to be a hacker (and I have the paper copy). I've not taken a shower since I started, nor shaved, and eaten only pizza and hamburger. But I'm fine.
+
+Dear Diary, day 12
+
+Kernel modules cannot be chosen at random. It seems that I did something wrong with the graphic card module. My monitor exploded. Not a big problem, I have another one. In the fire, the paper copy of the demonstration of the last Fermat theorem burnt. Not a big problem either, it didn't deal with Linux. My burn marks will heal in a month, no one will notice the skars when I'll be a cool hacker. I took 4 Kg: I'll lose them when I have time.
+
+Dear Diary, day 14
+
+I spent 2 days choosing what programs to install: the list counts 6739, including names without vowels like ed, amb, brlscnb, mvf, fncl. Among these, 1356 are text editors! It seems you need every one of them. Hackers know more tricks than a cartful of monkeys!
+
+Dear Diary, day 15
+
+XF86Config, it surely knows MORE tricks than a cartful of monkeys! It knows one more than the devil, or maybe it is used to summon the devil himself, I'm not sure
+
+Dear Diary, day 20
+
+Finally my computer is working. It took less than 3 weeks, a true record. I had to skip my showers to save time, but this didn't affect me. Sure, audio still doesn't work, graphics has no more than 16 colors at 640*480, CD burner seems dead and mouse pointer teleports from one corner to the opposite of the display. But it's the ability to face these little annoyances that makes a real hacker. Now I shall connect to internet. They told me other hackers are really friendly to who wants to learn the basis.
+
+The neighbors asked where is the corpse. "What corpse?" I asked. "We can smell a corpse decomposing" they answer. I don't get it. I cannot smell anything. Are they crazy? Actually, they kept throwing glances at me.
+
+Dear Diary, day 21
+
+Today I attempted to connect to the Internet. I have a WinModem. This is BAD.
+
+Dear Diary, day 22
+
+Today I tried again. Something went wrong, I can hear strange noises coming from the modem, they seem a little angry, too.
+
+Dear Diary, day 23
+
+The strange noises were the voice of a Cambodian guy answering my phone calls. It seems that his phone number is the one set as default for internet connections. He said that he can read the newspaper aloud, if I need to feel the "information highway". I declined for now. His name is Chea Vichea.
+
+Dear Diary, day 24
+
+I succeeded! As long as I stay still inside the black cockerel blood pentagram, everything works perfectly! I wonder what will happen at dawn.
+
+I hear strange noises coming from the basement…
+
+Dear Diary, day 25
+
+I sent some email asking for help. I wrote to the Kernel Dev mailing list, it looks like the best place to find experts.
+
+Dear Diary, day 26
+
+Who is RTFM? When will he start to help me?
+
+Dear Diary, day 31 (or maybe 52?)
+
+I've been fined. Looks like burning computers on the balcony is not allowed. I tried to justify myself saying "come on, it's New Years Eve, after all!", but they explained that New Year's Eve has been 3 weeks ago: I must have lost the sense of time. Now that I eliminated the computer, I feel way better. After the third shower, I heard my neighbors yelling "finally, they fixed that drain, the air was unbreathable!". I bought a machete to shave, after breaking 3 razors.
+
+Tomorrow I'm leaving for Cambodia, I phoned Chea Vichea. He found me a job as farmhand in rice fields. Can't wait! He told that the nearest computer is 5 Km away from his village, will it be enough??
+
+---
+
+see more at https://files.clifford.lol/copypastas/

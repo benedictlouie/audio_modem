@@ -1,12 +1,23 @@
 import os
 import librosa
 import numpy as np
+import subprocess
+import os
+import platform
 from scipy.io.wavfile import write
 
 from utils.parameters import *
 
 def load_audio_file(file_path: str) -> np.ndarray:
     return librosa.load(file_path, sr=None)[0]
+
+def open_file_with_default_app(filepath):
+    if platform.system() == 'Windows':
+        os.startfile(filepath)
+    elif platform.system() == 'Darwin':  # macOS
+        subprocess.run(['open', filepath])
+    else:  # Linux and other Unix-like systems
+        subprocess.run(['xdg-open', filepath])
 
 def write_wav(filename: str, data: np.ndarray, sample_rate: int = SAMPLE_RATE) -> None:
     data = np.int16(data / np.max(np.abs(data)) * 32767)
@@ -28,20 +39,14 @@ def get_bitstream_from_symbols(symbols: np.ndarray, noise_variance) -> np.ndarra
 
     # Use the real and imaginary parts of the symbols to find LLR.
     LLR = np.empty(len(symbols) * BITS_PER_SYMBOL)
-    LLR[::2] = symbols.real
-    LLR[1::2] = symbols.imag
-    
-    # Find LLR
-    if not isinstance(noise_variance, (np.ndarray, list, tuple)): noise_variance = np.array([noise_variance])
-    assert len(LLR) % len(noise_variance) == 0
-    noise_variance = np.tile(noise_variance, len(LLR) // len(noise_variance))
-    LLR *= np.sqrt(2) / noise_variance
-
-    # Stop at the last multiple of N
-    LLR = LLR[:(len(LLR) // CODE.N) * CODE.N]
+    new_symbols = np.reshape(symbols, (-1, SYMBOLS_PER_BLOCK)).copy()
+    new_symbols *= 2 / noise_variance
+    new_symbols = new_symbols.flatten()
+    LLR[::2] = new_symbols.real
+    LLR[1::2] = new_symbols.imag
 
     # Decode LDPC
-    num_max_iter = 0
+    max_iter = []
     bitstream = np.array([])
     for i in range(0, len(LLR), CODE.N):
         # decoded is the final LLR after the message passing.
@@ -49,12 +54,12 @@ def get_bitstream_from_symbols(symbols: np.ndarray, noise_variance) -> np.ndarra
         decoded, num_iterations = CODE.decode(LLR[i:i + CODE.N], DECTYPE)
         # Only the first K bits matter due to the systematic generator matrix 
         bitstream = np.concatenate((bitstream, decoded[:CODE.K]))
-        num_max_iter += num_iterations == 200
+        max_iter.append(num_iterations == 200)
 
-    print(f"LDPC decoding finished with {num_max_iter} max iterations.")
+    print(f"LDPC decoding finished with {sum(max_iter)} max iterations.")
     # Replace positive LLRs with 0 and negative LLRs with 1.
     bitstream = np.where(bitstream > 0, 0, 1)
-    return bitstream
+    return bitstream, max_iter
 
 def get_symbols_from_bitstream(bitstream: np.ndarray, skip_encoding: bool = False) -> np.ndarray:
     """
@@ -68,7 +73,7 @@ def get_symbols_from_bitstream(bitstream: np.ndarray, skip_encoding: bool = Fals
         encoded_bitstream = bitstream
     else:
         # Pad until a multiple of CODE.K before doing LDPC
-        bitstream = np.concatenate((bitstream, np.random.default_rng(42).integers(2, size=(-len(bitstream)) % CODE.K)))
+        bitstream = np.concatenate((bitstream, np.random.default_rng(1).integers(2, size=(-len(bitstream)) % (CODE.K * INFORMATION_BLOCKS_PER_FRAME * 2))))
 
         # Encode LDPC
         encoded_bitstream = np.array([])

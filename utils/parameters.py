@@ -1,13 +1,14 @@
 import utils.ldpc as ldpc
 
-# Frequently used Settings
+# Frequently-used Settings
 AUDIO_PATH = "output.wav"               # Output audio after encoding
 RECEIVED_AUDIO_PATH = AUDIO_PATH
 RECEIVED_AUDIO_PATH = "received.wav"    # Input audio for decoding
-FILE_PATH = "files/caca.tiff"
+FILE_PATH = "received_5.tiff"
 KNOWN_RECEIVER = False
+LDPC_RATE = '5/6'
 SHIFT_BACK = 3
-SYNCHRONIZATION_LENGTH = 2**10
+RESIDUAL_THRESHOLD = 1 # For the RANSAC model
 
 SAMPLE_RATE = 48000
 
@@ -41,4 +42,4 @@ assert BITS_PER_SYMBOL == 2
 
 # LDPC Settings
 DECTYPE = 'sumprod2'
-CODE = ldpc.code(z=81, rate='3/4')
+CODE = ldpc.code(z=81, rate=LDPC_RATE)

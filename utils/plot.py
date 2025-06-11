@@ -34,7 +34,7 @@ def plot_sent_received_constellation(sent: np.ndarray, received: np.ndarray) -> 
             plt.plot(sym.real, sym.imag, 'x', markersize=12, markeredgewidth=2,
                     color=color_map[sym], label=f'Sent: {sym}')
     else:
-        plt.scatter(received.real, received.imag, color='gray', alpha=0.1)
+        plt.scatter(received.real, received.imag, color='gray', alpha=0.01)
 
     plt.axhline(0, color='black', linewidth=0.5)
     plt.axvline(0, color='black', linewidth=0.5)

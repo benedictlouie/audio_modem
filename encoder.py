@@ -9,18 +9,12 @@ def encode(symbols: np.ndarray) -> np.ndarray:
     """
 
     # Pad until a multiple of SYMBOLS_PER_BLOCK
-    constellation = [1+1j, 1-1j, -1-1j, -1+1j]
-    paddingSymbols = np.random.default_rng(76).choice(constellation, size=(-len(symbols)) % (SYMBOLS_PER_BLOCK * INFORMATION_BLOCKS_PER_FRAME))
-    symbols = np.concatenate((symbols, paddingSymbols))
+    assert (len(symbols) % (SYMBOLS_PER_BLOCK * INFORMATION_BLOCKS_PER_FRAME)) == 0
     symbols = symbols.reshape((-1, SYMBOLS_PER_BLOCK))
 
-    # We need at least 2 frames
-    while len(symbols) < INFORMATION_BLOCKS_PER_FRAME * 2:
-        paddingSymbols = np.random.default_rng(77).choice(constellation, size=(INFORMATION_BLOCKS_PER_FRAME, SYMBOLS_PER_BLOCK))
-        symbols = np.vstack((symbols, paddingSymbols))
-    
     # Fill unused frequency bins
     # After that, symbols is a matrix with EFFECTIVE_SYMBOLS_PER_BLOCK columns
+    constellation = np.array([1 + 1j, 1 - 1j, -1 - 1j, -1 + 1j])
     symbols = np.concatenate((np.random.default_rng(78).choice(constellation, size=(symbols.shape[0], HIGH_PASS_INDEX)),
                               symbols,
                               np.random.default_rng(79).choice(constellation, size=(symbols.shape[0], EFFECTIVE_SYMBOLS_PER_BLOCK - LOW_PASS_INDEX)),
